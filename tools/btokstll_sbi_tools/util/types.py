@@ -1,5 +1,6 @@
 
 from dataclasses import dataclass
+import pathlib
 
 import pandas
 import numpy
@@ -68,3 +69,10 @@ def to_pandas_interval(a:tuple|pandas.Interval):
         a = pandas.Interval(*a)
 
     return a
+
+
+def append_to_stem(
+    path:pathlib.Path, 
+    s:str,
+):
+    return path.with_stem(f"{path.stem}{s}")
