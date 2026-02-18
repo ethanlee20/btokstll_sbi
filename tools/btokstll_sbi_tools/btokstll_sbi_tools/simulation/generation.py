@@ -5,6 +5,7 @@ import json
 import dataclasses
 import functools
 import time
+from typing import NoReturn
 
 import pandas
 import numpy
@@ -407,8 +408,9 @@ def root_to_parquet(path_to_root_file):
 
 def combine_files(
     main_data_dir:pathlib.Path,
-    metadata_file_name=pathlib.Path("metadata.json")
-):
+    metadata_file_name=pathlib.Path("metadata.json"),
+) -> pandas.DataFrame:
+    
     unconverted_file_paths = [
         p for p in main_data_dir.rglob("*.root")
         if not p.with_suffix(".parquet").is_file()
