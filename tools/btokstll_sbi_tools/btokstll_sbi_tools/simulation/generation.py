@@ -4,18 +4,18 @@ import subprocess
 import json
 import dataclasses
 import functools
+import time
 
 import pandas
 import numpy
 import uproot
 import tqdm
 
-from ..utilities.types import (
+from ..util.types import (
     safer_convert_to_int, 
-    are_instance,
-    to_pandas_interval,
     Interval,
-    append_to_stem
+    append_to_stem,
+    get_nodes_nested_dict
 )
 
 
@@ -101,10 +101,16 @@ class Trial_Metadata:
         def reconstruct(key, cls_):
             metadata_dict[key] = cls_(**metadata_dict[key])
         
-        reconstruct("delta_wilson_coefficient_set", Delta_Wilson_Coefficient_Set)
+        reconstruct(
+            "delta_wilson_coefficient_set", 
+            Delta_Wilson_Coefficient_Set
+        )
         for key in metadata_dict["delta_wilson_coefficient_distribution"].keys():
             reconstruct(key, Interval)
-        reconstruct("delta_wilson_coefficient_distribution", Uniform_Delta_Wilson_Coefficient_Distribution)
+        reconstruct(
+            "delta_wilson_coefficient_distribution", 
+            Uniform_Delta_Wilson_Coefficient_Distribution
+        )
     
         return cls(**metadata_dict)
 
@@ -202,69 +208,20 @@ class Directory_Manager:
             metadata.to_json_file(dir_)
 
 
-class Job_Submitter:
-    def __init__(
-        self,
-        main_data_dir:pathlib.Path,
-        max_num_jobs:int, 
-        metadata_file_name:pathlib.Path=pathlib.Path("metadata.json"),
-        recon_file_name:pathlib.Path=pathlib.Path("recon.root")
-    ):
-        if not main_data_dir.is_dir():
-            raise ValueError(
-                "Main data directory not found"
-                f" ({main_data_dir})."
-            )
-        self.main_data_dir = main_data_dir
-        self.max_num_jobs = max_num_jobs
-        self.metadata_file_name = metadata_file_name
-        self.recon_file_name = recon_file_name
-    
-    @property
-    def incomplete_dirs(
-        self
-    ):
-        def is_incomplete(dir_:pathlib.Path):
-            num_subtrials = Trial_Metadata.from_json_file(
-                dir_.joinpath(self.metadata_file_name)
-            ).num_subtrials
-            num_recon_files = len(list(
-                dir_.glob(str(
-                    append_to_stem(self.recon_file_name, '*')
-                ))
-            ))
-            if num_subtrials != num_recon_files:
-                return True
-            return False
-        
-        return [
-            p for p in self._all_candidate_dirs 
-            if is_incomplete(p)
-        ] 
-    
-    @functools.cached_property
-    def _all_candidate_dirs(
-        self
-    ):
-        metadata_file_paths = self.main_data_dir.rglob(str(
-            self.metadata_file_name
-        ))
-        return [p.parent for p in metadata_file_paths]
-
-
-
-def make_dec_file(
-    file_path, 
-    lepton_flavor, 
-    delta_c_7, 
-    delta_c_9, 
-    delta_c_10
+def write_dec_file(
+    file_path: pathlib.Path, 
+    lepton_flavor: str, 
+    delta_wilson_coefficient_set: Delta_Wilson_Coefficient_Set, 
 ):
 
     if lepton_flavor not in ("e", "mu"):
         raise ValueError(
             f"Lepton flavor ({lepton_flavor}) must be 'e' or 'mu'."
         )
+    
+    delta_c_7 = delta_wilson_coefficient_set.delta_c_7
+    delta_c_9 = delta_wilson_coefficient_set.delta_c_9
+    delta_c_10 = delta_wilson_coefficient_set.delta_c_10
 
     content = f"""
     Alias MyB0 B0
@@ -299,65 +256,120 @@ def make_dec_file(
         f.write(content)
 
 
-
-
-
-def run_subtrial_job(
-    path_to_sim_steer_file, 
-    path_to_recon_steer_file, 
-    path_to_decay_file, 
-    path_to_sim_out_file, 
-    path_to_recon_out_file, 
-    path_to_log_file, 
-    num_events_per_subtrial, 
-    lepton_flavor
+def submit_job(
+    lepton_flavor,
+    num_events,
+    sim_steer_file_path,
+    recon_steer_file_path,
+    decay_file_path,
+    sim_file_path,
+    recon_file_path,
+    log_file_path,
 ):
-    
     subprocess.run(
-        f'bsub -q l "basf2 {path_to_sim_steer_file} -- {path_to_decay_file} {path_to_sim_out_file} {num_events_per_subtrial} &>> {path_to_log_file}'
-        f' && basf2 {path_to_recon_steer_file} {lepton_flavor} {path_to_sim_out_file} {path_to_recon_out_file} &>> {path_to_log_file}'
-        f' && rm {path_to_sim_out_file}"',
+        f'bsub -q l "basf2 {sim_steer_file_path} -- {decay_file_path} {sim_file_path} {num_events} &>> {log_file_path}'
+        f' && basf2 {recon_steer_file_path} {lepton_flavor} {sim_file_path} {recon_file_path} &>> {log_file_path}'
+        f' && rm {sim_file_path}"',
         shell=True,
     )
 
 
-def run_jobs(parent_data_dir, path_to_sim_steer_file, path_to_recon_steer_file):
+@dataclasses.dataclass
+class Job_Submitter:
+    main_data_dir:pathlib.Path
+    recon_steer_file_path:pathlib.Path
+    sim_steer_file_path:pathlib.Path
+    metadata_file_name:pathlib.Path = pathlib.Path("metadata.json")
+    recon_file_name:pathlib.Path = pathlib.Path("recon.root")
+    sim_file_name:pathlib.Path = pathlib.Path("sim.root")
+    decay_file_name:pathlib.Path = pathlib.Path("decay.dec")
+    log_file_name:pathlib.Path = pathlib.Path("log.log")
+    batch_size:int = 500
+    batch_wait:int = 300
 
-    all_trial_dirs = [
-        metadata_path.parent for metadata_path 
-        in parent_data_dir.rglob("metadata.json")
-    ]
-
-    trial_dirs_to_run = [
-        dir_ for dir_ in all_trial_dirs
-        if not check_trial_completed(dir_)
-    ]
-
-    print("Running these trials:")
-    for dir_ in trial_dirs_to_run: print(dir_)
-
-    for dir_ in trial_dirs_to_run:
-
-        metadata = pandas.read_json(
-            dir_.joinpath("metadata.json"),
-            typ="series"
-        )
-
-        make_dec_file(
-            file_path=dir_.joinpath("decay.dec"),
-            **metadata[["lepton_flavor", "dc7", "dc9", "dc10"]]
-        )
-
-        for subtrial in range(metadata["num_subtrials"]):
-            run_subtrial_job(
-                path_to_sim_steer_file=path_to_sim_steer_file,
-                path_to_recon_steer_file=path_to_recon_steer_file,
-                path_to_decay_file=dir_.joinpath("decay.dec"),
-                path_to_sim_out_file=dir_.joinpath(f"sim_{subtrial}.root"),
-                path_to_recon_out_file = dir_.joinpath(f"recon_{subtrial}.root"),
-                path_to_log_file=dir_.joinpath("log.log"),
-                **metadata[["lepton_flavor", "num_events_per_subtrial"]]
+    def __post_init__(
+        self,
+    ):
+        if not self.main_data_dir.is_dir():
+            raise ValueError(
+                "Main data directory not found"
+                f" ({self.main_data_dir})."
             )
+        
+        self.num_submitted_jobs = 0
+    
+    @property
+    def incomplete_dirs(
+        self
+    ):
+        def is_incomplete(dir_:pathlib.Path):
+            num_subtrials = Trial_Metadata.from_json_file(
+                dir_.joinpath(self.metadata_file_name)
+            ).num_subtrials
+            num_recon_files = len(list(
+                dir_.glob(str(
+                    append_to_stem(self.recon_file_name, '*')
+                ))
+            ))
+            if num_subtrials != num_recon_files:
+                return True
+            return False
+        
+        return [
+            p for p in self._all_candidate_dirs 
+            if is_incomplete(p)
+        ] 
+    
+    @functools.cached_property
+    def _all_candidate_dirs(
+        self
+    ):
+        metadata_file_paths = self.main_data_dir.rglob(str(
+            self.metadata_file_name
+        ))
+        return [p.parent for p in metadata_file_paths]
+
+    def submit_jobs(
+        self,
+    ):
+        for dir_ in self.incomplete_dirs:
+
+            decay_file_path = dir_.joinpath(self.decay_file_name)
+            log_file_path = dir_.joinpath(self.log_file_name)
+            metadata_file_path = dir_.joinpath(self.metadata_file_name)
+
+            metadata = Trial_Metadata.from_json_file(metadata_file_path)
+
+            write_dec_file(
+                decay_file_path, 
+                metadata.lepton_flavor, 
+                metadata.delta_wilson_coefficient_set
+            )
+
+            for subtrial in range(metadata.num_subtrials):
+
+                sim_file_path = dir_.joinpath(
+                    append_to_stem(self.sim_file_name, subtrial)
+                )
+                recon_file_path = dir_.joinpath(
+                    append_to_stem(self.recon_file_name, subtrial)
+                )
+
+                submit_job(
+                    lepton_flavor=metadata.lepton_flavor,
+                    num_events=metadata.num_events_per_subtrial,
+                    sim_steer_file_path=self.sim_steer_file_path,
+                    recon_steer_file_path=self.recon_steer_file_path,
+                    decay_file_path=decay_file_path,
+                    sim_file_path=sim_file_path,
+                    recon_file_path=recon_file_path,
+                    log_file_path=log_file_path,
+                )
+
+                self.num_submitted_jobs += 1
+
+                if self.num_submitted_jobs % self.batch_size == 0:
+                    time.sleep(self.batch_wait)
 
 
 def open_simulated_data_root_file(path, unwanted_keys=["persistent;1", "persistent;2"]):
@@ -393,43 +405,54 @@ def root_to_parquet(path_to_root_file):
     dataframe.to_parquet(save_path)
 
 
-def combine_files(path_to_parent_data_dir):
+def combine_files(
+    main_data_dir:pathlib.Path,
+    metadata_file_name=pathlib.Path("metadata.json")
+):
+    unconverted_file_paths = [
+        p for p in main_data_dir.rglob("*.root")
+        if not p.with_suffix(".parquet").is_file()
+    ]
+    for p in (
+        pbar := tqdm.tqdm(
+            unconverted_file_paths, 
+            desc="Converting files"
+        )
+    ):
+        pbar.set_postfix_str(p.name)
+        root_to_parquet(p)
 
-    path_to_parent_data_dir = pathlib.Path(path_to_parent_data_dir)
-    metadata_file_paths = list(path_to_parent_data_dir.rglob("metadata.json"))
-    data_dirs = []
+    dataframes = []
+    metadatas = []
+    for p in (
+        pbar := tqdm.tqdm(
+            main_data_dir.rglob("*.parquet"),
+            desc="Loading files"
+        )
+    ):
+        pbar.set_postfix_str(p.name)
 
-    list_of_dataframes = []
-    list_of_keys = []
+        data = pandas.read_parquet(p)
+        dataframes.append(data)
 
-    for path_to_metadata in (pbar:=tqdm.tqdm(metadata_file_paths, desc="Combining files")):
+        metadata_file_path = p.parent.joinpath(
+            metadata_file_name
+        )
+        metadata = Trial_Metadata.from_json_file(
+            metadata_file_path
+        )
+        metadatas.append(metadata)
 
-        data
-
-        pbar.set_postfix_str(path_to_metadata.parent)
-
-        metadata = pandas.read_json(path_to_metadata, typ="series")
-
-        path_to_parquet_file = path_to_metadata.with_name(f"{path_to_metadata.stem}_re.parquet")
-        if not path_to_parquet_file.is_file():
-            path_to_root_file = path_to_parquet_file.with_suffix(".root")
-            root_to_parquet(path_to_root_file)
-        data = pandas.read_parquet(path_to_parquet_file)
-
-        data = data.assign(**metadata.drop(labels=["trial", "sub_trial", "num_events"]))
-
-        trial = safer_convert_to_int(metadata["trial"])
-        sub_trial = safer_convert_to_int(metadata["sub_trial"])
-        split = get_split(trial)
-        keys = (trial, sub_trial, split)
-
-        list_of_dataframes.append(data)
-        list_of_keys.append(keys)
-
+    metadata_nodes = [
+        get_nodes_nested_dict(dataclasses.asdict(m)) 
+        for m in metadatas
+    ]
+    keys = [tuple(n.values()) for n in metadata_nodes]
+    names = list(metadata_nodes[0].keys())
     data = pandas.concat(
-        list_of_dataframes, 
-        keys=list_of_keys, 
-        names=["trial", "sub_trial", "split"], 
+        dataframes, 
+        keys=keys,
+        names=names, 
         verify_integrity=True
     )
     data = data.sort_index()
