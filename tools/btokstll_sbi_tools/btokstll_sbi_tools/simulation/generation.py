@@ -48,8 +48,8 @@ class Sampler:
         num_samples:int
     ):
         bounds = dataclasses.asdict(self.distribution).values()
-        lower_bounds = [b.left for b in bounds]
-        upper_bounds = [b.right for b in bounds]
+        lower_bounds = [b["left"] for b in bounds]
+        upper_bounds = [b["right"] for b in bounds]
         samples = self.rng.uniform(
             low=lower_bounds,
             high=upper_bounds,
@@ -87,7 +87,7 @@ class Trial_Metadata:
     ):
         metadata_dict = dataclasses.asdict(self)
         with open(path, 'x') as file:
-            json.dump(metadata_dict, file)
+            json.dump(metadata_dict, file, indent=4)
 
     @classmethod
     def from_json_file(
@@ -99,20 +99,25 @@ class Trial_Metadata:
         with open(path, 'r') as f:
             metadata_dict = json.load(f)
         
-        def reconstruct(key, cls_):
-            metadata_dict[key] = cls_(**metadata_dict[key])
+        def reconstruct(dict, key, cls_):
+            dict[key] = cls_(**dict[key])
         
         reconstruct(
+            metadata_dict, 
             "delta_wilson_coefficient_set", 
             Delta_Wilson_Coefficient_Set
         )
         for key in metadata_dict["delta_wilson_coefficient_distribution"].keys():
-            reconstruct(key, Interval)
+            reconstruct(
+                metadata_dict["delta_wilson_coefficient_distribution"],
+                key, 
+                Interval
+            )
         reconstruct(
+            metadata_dict,
             "delta_wilson_coefficient_distribution", 
             Uniform_Delta_Wilson_Coefficient_Distribution
         )
-    
         return cls(**metadata_dict)
 
 
@@ -183,7 +188,7 @@ class Directory_Manager:
             for p in paths_files_metadata
         ]
         trial_nums = [m.trial_num for m in metadatas]
-        largest = 0 if trial_nums == [] else max(trial_nums)
+        largest = -1 if trial_nums == [] else max(trial_nums)
         return largest
     
     def setup_dirs(
@@ -206,7 +211,7 @@ class Directory_Manager:
         dir_paths = [self.main_data_dir.joinpath(n) for n in dir_names]
         for dir_, metadata in zip(dir_paths, self.metadata_list):
             dir_.mkdir()
-            metadata.to_json_file(dir_)
+            metadata.to_json_file(dir_.joinpath(self.metadata_file_name))
 
 
 def write_dec_file(
