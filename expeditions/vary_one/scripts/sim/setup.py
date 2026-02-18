@@ -33,8 +33,8 @@ distributions = {
 }
 
 num_trials = {
-    "train": 10, 
-    "val": 10
+    "train": 3, 
+    "val": 4
 }
 
 num_subtrials = {
@@ -43,8 +43,8 @@ num_subtrials = {
 }
 
 num_events_per_trial = {
-    "train": 10, 
-    "val": 10,
+    "train": 3, 
+    "val": 3,
 }
 
 for experiment in distributions.keys():
