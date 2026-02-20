@@ -3,6 +3,8 @@ import numpy
 import torch
 import pandas
 
+from ..util.types import are_instance
+
 
 def generate_batched_indices(dataset_size, batch_size, shuffle):
 

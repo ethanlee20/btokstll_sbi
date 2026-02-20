@@ -1,4 +1,9 @@
 
+import torch
+
+from btokstll_sbi_tools.util.types import to_torch_tensor, are_instance
+
+
 class Dataset:
 
     def __init__(self, features, labels):

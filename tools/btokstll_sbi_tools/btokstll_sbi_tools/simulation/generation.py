@@ -413,6 +413,8 @@ def root_to_parquet(path_to_root_file):
 
 def combine_files(
     main_data_dir:pathlib.Path,
+    dist:Uniform_Delta_Wilson_Coefficient_Distribution,
+    split:str,
     metadata_file_name=pathlib.Path("metadata.json"),
 ) -> pandas.DataFrame:
     
@@ -429,29 +431,53 @@ def combine_files(
         pbar.set_postfix_str(p.name)
         root_to_parquet(p)
 
+    
+    to_combine_paths = list(main_data_dir.rglob("*.parquet"))
+    metadata_paths = [p.with_name(str(metadata_file_name)) for p in to_combine_paths]
+    metadatas = [Trial_Metadata.from_json_file(p) for p in metadata_paths]
+    to_combine_paths = [
+        path for path, metadata 
+        in zip(to_combine_paths, metadatas) 
+        if ((metadata.delta_wilson_coefficient_distribution == dist) 
+        and (metadata.split==split))
+    ]
+    metadatas = [
+        metadata for metadata 
+        in metadatas
+        if ((metadata.delta_wilson_coefficient_distribution == dist) 
+        and (metadata.split==split))
+    ]
     dataframes = []
-    metadatas = []
-    for p in (
+    for path in (
         pbar := tqdm.tqdm(
-            main_data_dir.rglob("*.parquet"),
+            to_combine_paths,
             desc="Loading files"
         )
     ):
-        pbar.set_postfix_str(p.name)
+        pbar.set_postfix_str(path.name)
 
-        data = pandas.read_parquet(p)
+        data = pandas.read_parquet(path)
         dataframes.append(data)
 
-        metadata_file_path = p.parent.joinpath(
-            metadata_file_name
-        )
-        metadata = Trial_Metadata.from_json_file(
-            metadata_file_path
-        )
-        metadatas.append(metadata)
-
+    
+    # fix!
     metadata_nodes = [
-        get_nodes_nested_dict(dataclasses.asdict(m)) 
+        {
+            "trial_num":m.trial_num,
+            "num_events_per_trial":m.num_events_per_trial,
+            "num_subtrials":m.num_subtrials,
+            "split":m.split,
+            "lepton_flavor":m.lepton_flavor,
+            "delta_c_7":m.delta_wilson_coefficient_set.delta_c_7,
+            "delta_c_9":m.delta_wilson_coefficient_set.delta_c_9,
+            "delta_c_10":m.delta_wilson_coefficient_set.delta_c_10,
+            "delta_c_7_bounds_left":m.delta_wilson_coefficient_distribution.delta_c_7_bounds.left,
+            "delta_c_7_bounds_right":m.delta_wilson_coefficient_distribution.delta_c_7_bounds.right,
+            "delta_c_9_bounds_left":m.delta_wilson_coefficient_distribution.delta_c_9_bounds.left,
+            "delta_c_9_bounds_right":m.delta_wilson_coefficient_distribution.delta_c_9_bounds.right,
+            "delta_c_10_bounds_left":m.delta_wilson_coefficient_distribution.delta_c_10_bounds.left,
+            "delta_c_10_bounds_right":m.delta_wilson_coefficient_distribution.delta_c_10_bounds.right,
+        }
         for m in metadatas
     ]
     keys = [tuple(n.values()) for n in metadata_nodes]
