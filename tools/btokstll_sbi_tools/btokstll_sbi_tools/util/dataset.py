@@ -1,7 +1,7 @@
 
-import torch
+from torch import Tensor
 
-from btokstll_sbi_tools.util.types import to_torch_tensor, are_instance
+from .type import to_torch_tensor, are_instance
 
 
 class Dataset:
@@ -11,7 +11,7 @@ class Dataset:
         features = to_torch_tensor(features)
         labels = to_torch_tensor(labels)
 
-        assert are_instance([features, labels], torch.Tensor)
+        assert are_instance([features, labels], Tensor)
         assert len(features) == len(labels)
 
         self.features = features

@@ -1,25 +1,27 @@
 
-import pandas
+from pandas import Series, DataFrame, cut
 
 
-def bin(data:pandas.Series, bins):
-
+def bin_(
+    data:Series, 
+    bins,
+):
     """Bin data using given bins."""
 
-    binned_indices = pandas.cut(
+    binned_indices = cut(
         data,
         bins,
         labels=False,
         include_lowest=True
     )
-    binned_intervals = pandas.cut(
+    binned_intervals = cut(
         data, 
         bins, 
         labels=None, 
         include_lowest=True
     )
     binned_mids = binned_intervals.apply(lambda interval : interval.mid)
-    binned = pandas.DataFrame(
+    binned = DataFrame(
         {
             "original": data,
             "bin_index": binned_indices, 

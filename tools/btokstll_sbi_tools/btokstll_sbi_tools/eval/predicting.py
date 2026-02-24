@@ -1,6 +1,6 @@
 
 import torch
-from btokstll_sbi_tools.util.types import to_torch_tensor
+from tools.btokstll_sbi_tools.btokstll_sbi_tools.util.type import to_torch_tensor
 
 
 class Predictor:

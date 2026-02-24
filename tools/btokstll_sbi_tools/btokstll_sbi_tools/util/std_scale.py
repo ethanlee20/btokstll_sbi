@@ -1,10 +1,11 @@
 
-import torch
-import pandas
+from pandas import Series, DataFrame
 
 
-def normalize_using_reference_data(data:pandas.DataFrame|pandas.Series, reference:pandas.DataFrame|pandas.Series):
-
+def std_scale(
+    data:DataFrame|Series, 
+    reference:DataFrame|Series,
+):
     """Standard scale a dataset using the mean and standard deviation of a reference dataset."""
 
     means = reference.mean()

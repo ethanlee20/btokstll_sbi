@@ -1,22 +1,24 @@
 
-import numpy
-import torch
-import pandas
+from torch import arange, randperm, reshape
+from numpy import floor
 
-from ..util.types import are_instance
+from ..util import are_instance, Dataset
 
 
-def generate_batched_indices(dataset_size, batch_size, shuffle):
-
+def generate_batched_indices(
+    dataset_size:int, 
+    batch_size:int, 
+    shuffle:bool,
+):
     assert are_instance([dataset_size, batch_size], int)
     assert isinstance(shuffle, bool)
     assert dataset_size > batch_size
 
-    indices = torch.arange(dataset_size)
+    indices = arange(dataset_size)
     if shuffle: 
-        indices = indices[torch.randperm(len(indices))]
-    num_batches = int(numpy.floor(dataset_size / batch_size))
-    batched_indices = torch.reshape(
+        indices = indices[randperm(len(indices))]
+    num_batches = int(floor(dataset_size / batch_size))
+    batched_indices = reshape(
         indices[:num_batches*batch_size], 
         shape=(num_batches, batch_size)
     )
@@ -27,9 +29,9 @@ class Data_Loader:
 
     def __init__(
         self,
-        dataset,
-        batch_size,
-        shuffle,
+        dataset:Dataset,
+        batch_size:int,
+        shuffle:bool,
     ):
         self.dataset = dataset
         self.batch_size = batch_size
@@ -42,17 +44,20 @@ class Data_Loader:
             self.shuffle
         )
 
-    def __len__(self):
-        
+    def __len__(
+        self,
+    ):
         return len(self.batched_indices)
     
-    def __iter__(self):
-        
+    def __iter__(
+        self,
+    ):
         self.index = 0
         return self
     
-    def __next__(self):
-
+    def __next__(
+        self,
+    ):
         if self.index >= len(self):
             self.batched_indices = generate_batched_indices(
                 self.dataset_size, 

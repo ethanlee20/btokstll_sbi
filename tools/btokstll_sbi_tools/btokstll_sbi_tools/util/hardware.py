@@ -1,9 +1,9 @@
 
-import torch
+from torch import cuda
 
 
-def select_device():
-
+def select_device(
+):
     """
     Select a device to compute with.
 
@@ -11,12 +11,13 @@ def select_device():
     "cuda" if cuda is available, otherwise "cpu".
     """
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if cuda.is_available() else "cpu"
     print("Device: ", device)
     return device
 
 
-def get_model_current_device(model):
-
+def get_model_current_device(
+    model
+):
     device = next(model.parameters()).device
     return device
