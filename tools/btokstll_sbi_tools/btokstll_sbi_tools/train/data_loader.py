@@ -5,7 +5,7 @@ from numpy import floor
 from ..util import are_instance, Dataset
 
 
-def generate_batched_indices(
+def _generate_batched_indices(
     dataset_size:int, 
     batch_size:int, 
     shuffle:bool,
@@ -38,7 +38,7 @@ class Data_Loader:
         self.shuffle = shuffle
         
         self.dataset_size = len(self.dataset)
-        self.batched_indices = generate_batched_indices(
+        self.batched_indices = _generate_batched_indices(
             self.dataset_size, 
             self.batch_size, 
             self.shuffle
@@ -59,7 +59,7 @@ class Data_Loader:
         self,
     ):
         if self.index >= len(self):
-            self.batched_indices = generate_batched_indices(
+            self.batched_indices = _generate_batched_indices(
                 self.dataset_size, 
                 self.batch_size, 
                 self.shuffle

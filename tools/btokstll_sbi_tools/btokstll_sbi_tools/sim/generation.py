@@ -12,7 +12,7 @@ import numpy
 import uproot
 import tqdm
 
-from ..util.type import (
+from ..util import (
     safer_convert_to_int, 
     Interval,
     append_to_stem,

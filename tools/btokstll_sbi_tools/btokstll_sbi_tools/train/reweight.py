@@ -1,17 +1,20 @@
 
-from pandas import Series
-
-from ..util import to_torch_tensor
+from torch import Tensor, bincount, sum
 
 
-def calculate_class_weights_for_uniform_prior(
-    labels:Series,
-):
-    """Calculate class weights for reweighting classes to uniform distribution."""
+def calculate_reweights_uniform(
+    binned_labels:Tensor,
+    num_bins:int,
+) -> Tensor:
+    """
+    Calculate class weights for reweighting 
+    classes to uniform distribution.
+    """
 
-    normalized_class_counts = to_torch_tensor(
-        labels.value_counts(normalize=True).sort_index()
+    bin_counts = bincount(
+        input=binned_labels, 
+        minlength=num_bins,
     )
-    weights = 1 / normalized_class_counts
-    return weights
+    inverse_bin_counts = 1 / bin_counts
+    return inverse_bin_counts / sum(inverse_bin_counts)
 

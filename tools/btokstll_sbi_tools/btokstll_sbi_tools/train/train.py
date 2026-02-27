@@ -1,10 +1,8 @@
 
-from pathlib import Path
-import json
 from dataclasses import asdict
 from types import NoneType
 
-from torch import Tensor, no_grad, save
+from torch import Tensor, no_grad
 from torch.nn import Module, CrossEntropyLoss
 from torch.optim import Optimizer, Adam
 from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
@@ -121,13 +119,6 @@ def _train_evaluate_epoch(
     )
 
     return train_loss, eval_loss
-
-
-def _save_torch_model(
-    model:Module, 
-    path:Path|str,
-):
-    save(model.state_dict(), path)
 
 
 _available_optimizers = {

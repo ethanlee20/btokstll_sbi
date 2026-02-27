@@ -29,7 +29,9 @@ class Hyperparams:
     eval_batch_size: int
     shuffle: bool
     epochs: range[int]
-    checkpoint_epochs: int
     loss_fn: CrossEntropyLoss_Hyperparams
     lr_scheduler: ReduceLROnPlateau_Hyperparams|None
+    num_bins: int
+    binned_interval_left: float
+    binned_interval_right: float
 
