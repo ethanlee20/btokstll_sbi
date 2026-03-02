@@ -1,5 +1,5 @@
 
-import pathlib
+from pathlib import Path
 import subprocess
 import json
 import dataclasses
@@ -7,16 +7,17 @@ import functools
 import time
 from typing import NoReturn
 
-import pandas
+from pandas import DataFrame, read_parquet, concat
 import numpy
 import uproot
-import tqdm
-
+from tqdm import tqdm
 from ..util import (
     safer_convert_to_int, 
     Interval,
     append_to_stem,
-    get_nodes_nested_dict
+    get_nodes_nested_dict,
+    load_json,
+    read_parquets
 )
 
 
@@ -123,7 +124,7 @@ class Trial_Metadata:
 
 @dataclasses.dataclass(frozen=True)
 class Directory_Manager:
-    main_data_dir: pathlib.Path
+    main_data_dir: Path
     num_trials: int
     num_subtrials: int
     num_events_per_trial: int
@@ -215,7 +216,7 @@ class Directory_Manager:
 
 
 def write_dec_file(
-    file_path: pathlib.Path, 
+    file_path: Path, 
     lepton_flavor: str, 
     delta_wilson_coefficient_set: Delta_Wilson_Coefficient_Set, 
 ):
@@ -282,14 +283,14 @@ def submit_job(
 
 @dataclasses.dataclass
 class Job_Submitter:
-    main_data_dir:pathlib.Path
-    recon_steer_file_path:pathlib.Path
-    sim_steer_file_path:pathlib.Path
-    metadata_file_name:pathlib.Path = pathlib.Path("metadata.json")
-    recon_file_name:pathlib.Path = pathlib.Path("recon.root")
-    sim_file_name:pathlib.Path = pathlib.Path("sim.root")
-    decay_file_name:pathlib.Path = pathlib.Path("decay.dec")
-    log_file_name:pathlib.Path = pathlib.Path("log.log")
+    main_data_dir:Path
+    recon_steer_file_path:Path
+    sim_steer_file_path:Path
+    metadata_file_name:Path = Path("metadata.json")
+    recon_file_name:Path = Path("recon.root")
+    sim_file_name:Path = Path("sim.root")
+    decay_file_name:Path = Path("decay.dec")
+    log_file_name:Path = Path("log.log")
     batch_size:int = 500
     batch_wait:int = 300
 
@@ -308,7 +309,7 @@ class Job_Submitter:
     def incomplete_dirs(
         self
     ):
-        def is_incomplete(dir_:pathlib.Path):
+        def is_incomplete(dir_:Path):
             num_subtrials = Trial_Metadata.from_json_file(
                 dir_.joinpath(self.metadata_file_name)
             ).num_subtrials
@@ -378,11 +379,13 @@ class Job_Submitter:
                     time.sleep(self.batch_wait)
 
 
-def open_simulated_data_root_file(path, unwanted_keys=["persistent;1", "persistent;2"]):
+def open_simulated_data_root_file(
+    path:Path|str, 
+    unwanted_keys:list[str]=["persistent;1", "persistent;2"],
+) -> DataFrame:
     
     """
     Open a simulated data root file as a pandas dataframe.
-
     Each tree will be labeled by a pandas multi-index.
     """
 
@@ -397,96 +400,110 @@ def open_simulated_data_root_file(path, unwanted_keys=["persistent;1", "persiste
             for key in keys
         ]
 
-    dataframe = pandas.concat(tree_dataframes, keys=keys, names=["sim_type",])
+    dataframe = concat(
+        tree_dataframes, 
+        keys=keys,
+        names=["sim_type",]
+    )
     return dataframe
 
 
-def root_to_parquet(path_to_root_file):
-    
-    path_to_root_file = pathlib.Path(path_to_root_file)
-    if not path_to_root_file.is_file():
-        raise FileNotFoundError(f"File not found: {path_to_root_file}")
-    dataframe = open_simulated_data_root_file(path_to_root_file).drop(columns="__eventType__")
-    save_path = path_to_root_file.with_suffix(".parquet")
+def root_to_parquet(
+    root_file_path:Path|str,
+) -> NoReturn:
+    root_file_path = Path(root_file_path)
+    if not root_file_path.is_file():
+        raise FileNotFoundError(f"File not found: {root_file_path}")
+    dataframe = open_simulated_data_root_file(root_file_path).drop(columns="__eventType__")
+    save_path = root_file_path.with_suffix(".parquet")
     dataframe.to_parquet(save_path)
 
 
-def combine_files(
-    main_data_dir:pathlib.Path,
-    dist:Uniform_Delta_Wilson_Coefficient_Distribution,
-    split:str,
-    metadata_file_name=pathlib.Path("metadata.json"),
-) -> pandas.DataFrame:
+def root_files_to_parquet(
+    paths:list[Path],
+    lazy:bool=True,
+) -> NoReturn:
     
-    unconverted_file_paths = [
-        p for p in main_data_dir.rglob("*.root")
-        if not p.with_suffix(".parquet").is_file()
-    ]
-    for p in (
-        pbar := tqdm.tqdm(
-            unconverted_file_paths, 
-            desc="Converting files"
+    to_convert = (
+        paths if not lazy 
+        else [
+            path for path in paths
+            if not path.with_suffix(".parquet").is_file()
+        ]
+    )
+    for path in to_convert:
+        root_to_parquet(path)
+
+
+def combine_files(
+    dirs:list[Path],
+    out_file_path:Path|str,
+) -> DataFrame:
+    
+    for dir_ in dirs:
+        if not dir_.is_dir():
+            raise ValueError(
+                "Input paths must be directories."
+                f" {dir_} is not a directory."
+            )
+        data_file_paths = (
+            list(dir_.glob("*.root")) + 
+            list(dir_.glob("*.parquet"))
+        )
+        if not data_file_paths:
+            raise ValueError(
+                f"No data file in directory: {dir_}"
+            )
+        if not dir_.joinpath("metadata.json").is_file():
+            raise ValueError(
+                f"No metadata file in directory: {dir_}"
+            )
+    
+    for dir_ in (
+        pbar := tqdm(
+            dirs, 
+            desc="Converting"
         )
     ):
-        pbar.set_postfix_str(p.name)
-        root_to_parquet(p)
+        pbar.set_postfix_str(dir_.name)
+        root_files_to_parquet(
+            dir_=dir_,
+            lazy=True,
+        )
 
-    
-    to_combine_paths = list(main_data_dir.rglob("*.parquet"))
-    metadata_paths = [p.with_name(str(metadata_file_name)) for p in to_combine_paths]
-    metadatas = [Trial_Metadata.from_json_file(p) for p in metadata_paths]
-    to_combine_paths = [
-        path for path, metadata 
-        in zip(to_combine_paths, metadatas) 
-        if ((metadata.delta_wilson_coefficient_distribution == dist) 
-        and (metadata.split==split))
+    metadata_file_paths = [
+        dir_.joinpath("metadata.json") 
+        for dir_ in dirs
     ]
     metadatas = [
-        metadata for metadata 
-        in metadatas
-        if ((metadata.delta_wilson_coefficient_distribution == dist) 
-        and (metadata.split==split))
+        load_json(path) 
+        for path in metadata_file_paths
     ]
-    dataframes = []
-    for path in (
-        pbar := tqdm.tqdm(
-            to_combine_paths,
-            desc="Loading files"
-        )
-    ):
-        pbar.set_postfix_str(path.name)
 
-        data = pandas.read_parquet(path)
-        dataframes.append(data)
-
+    data_file_paths = [
+        list(dir_.glob("*.parquet"))
+        for dir_ in dirs
+    ]
+    dataframes = [
+        read_parquets(paths)
+        for paths in data_file_paths
+    ]
     
-    # fix!
-    metadata_nodes = [
-        {
-            "trial_num":m.trial_num,
-            "num_events_per_trial":m.num_events_per_trial,
-            "num_subtrials":m.num_subtrials,
-            "split":m.split,
-            "lepton_flavor":m.lepton_flavor,
-            "delta_c_7":m.delta_wilson_coefficient_set.delta_c_7,
-            "delta_c_9":m.delta_wilson_coefficient_set.delta_c_9,
-            "delta_c_10":m.delta_wilson_coefficient_set.delta_c_10,
-            "delta_c_7_bounds_left":m.delta_wilson_coefficient_distribution.delta_c_7_bounds.left,
-            "delta_c_7_bounds_right":m.delta_wilson_coefficient_distribution.delta_c_7_bounds.right,
-            "delta_c_9_bounds_left":m.delta_wilson_coefficient_distribution.delta_c_9_bounds.left,
-            "delta_c_9_bounds_right":m.delta_wilson_coefficient_distribution.delta_c_9_bounds.right,
-            "delta_c_10_bounds_left":m.delta_wilson_coefficient_distribution.delta_c_10_bounds.left,
-            "delta_c_10_bounds_right":m.delta_wilson_coefficient_distribution.delta_c_10_bounds.right,
-        }
-        for m in metadatas
+    index_names = ["lepton_flavor", "split"]
+    index = [
+        {name: metadata.pop(name) for name in index_names} 
+        for metadata in metadatas
     ]
-    keys = [tuple(n.values()) for n in metadata_nodes]
-    names = list(metadata_nodes[0].keys())
-    data = pandas.concat(
+    dataframes = [
+        df.assign(**metadata) 
+        for df, metadata in zip(dataframes, metadatas)
+    ]
+
+    keys = [tuple(i.values()) for i in index]
+    data = concat(
         dataframes, 
         keys=keys,
-        names=names, 
-        verify_integrity=True
+        names=index_names, 
     )
-    data = data.sort_index()
+    data = data.sort_index() # check this for memory usage
     return data
