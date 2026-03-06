@@ -147,6 +147,10 @@ def train(
     verbose: bool = True,  
 ) -> Loss_Table:
     
+    model = model.to(device)
+    train_dataset.to_device(device)
+    eval_dataset.to_device(device)
+    
     optimizer_class = _available_optimizers[
         type(hyperparams.optimizer)
     ]
@@ -167,6 +171,7 @@ def train(
     ]
     lr_scheduler = (
         lr_scheduler_class(
+            optimizer=optimizer,
             **asdict(hyperparams.lr_scheduler)
         ) if lr_scheduler_class is not None
         else None
@@ -182,8 +187,6 @@ def train(
         hyperparams.eval_batch_size, 
         hyperparams.shuffle
     )
-    
-    model = model.to(device)
     
     if loss_table is None:
         loss_table = Loss_Table()

@@ -1,7 +1,7 @@
 
 from .bin import bin_
 from .dataset import Dataset, Dataset_Set
-from .dict_help import get_nodes_nested_dict
+from .dict_help import flatten_dict, access_nested_dict
 from .hardware import get_model_current_device, select_device
 from .interval import Interval
 from .save_load_model import load_torch_model_state_dict

@@ -15,7 +15,7 @@ from ..util import (
     safer_convert_to_int, 
     Interval,
     append_to_stem,
-    get_nodes_nested_dict,
+    flatten_dict,
     load_json,
     read_parquets
 )
@@ -381,7 +381,10 @@ class Job_Submitter:
 
 def open_simulated_data_root_file(
     path:Path|str, 
-    unwanted_keys:list[str]=["persistent;1", "persistent;2"],
+    unwanted_keys:list[str]=[
+        "persistent;1", 
+        "persistent;2"
+    ],
 ) -> DataFrame:
     
     """
@@ -410,19 +413,28 @@ def open_simulated_data_root_file(
 
 def root_to_parquet(
     root_file_path:Path|str,
-) -> NoReturn:
+) -> None:
+    
     root_file_path = Path(root_file_path)
     if not root_file_path.is_file():
-        raise FileNotFoundError(f"File not found: {root_file_path}")
-    dataframe = open_simulated_data_root_file(root_file_path).drop(columns="__eventType__")
-    save_path = root_file_path.with_suffix(".parquet")
+        raise FileNotFoundError(
+            f"File not found: {root_file_path}"
+        )
+    dataframe = open_simulated_data_root_file(
+        root_file_path
+    ).drop(
+        columns="__eventType__"
+    )
+    save_path = root_file_path.with_suffix(
+        ".parquet"
+    )
     dataframe.to_parquet(save_path)
 
 
 def root_files_to_parquet(
     paths:list[Path],
     lazy:bool=True,
-) -> NoReturn:
+) -> None:
     
     to_convert = (
         paths if not lazy 
@@ -438,7 +450,12 @@ def root_files_to_parquet(
 def combine_files(
     dirs:list[Path],
     out_file_path:Path|str,
-) -> DataFrame:
+    index_names:list[str]=[
+        "trial_num", 
+        "lepton_flavor", 
+        "split",
+    ]
+) -> None:
     
     for dir_ in dirs:
         if not dir_.is_dir():
@@ -446,11 +463,11 @@ def combine_files(
                 "Input paths must be directories."
                 f" {dir_} is not a directory."
             )
-        data_file_paths = (
+        nested_data_file_paths = (
             list(dir_.glob("*.root")) + 
             list(dir_.glob("*.parquet"))
         )
-        if not data_file_paths:
+        if not nested_data_file_paths:
             raise ValueError(
                 f"No data file in directory: {dir_}"
             )
@@ -466,8 +483,9 @@ def combine_files(
         )
     ):
         pbar.set_postfix_str(dir_.name)
+        root_file_paths = list(dir_.glob("*.root"))
         root_files_to_parquet(
-            dir_=dir_,
+            paths=root_file_paths,
             lazy=True,
         )
 
@@ -479,31 +497,44 @@ def combine_files(
         load_json(path) 
         for path in metadata_file_paths
     ]
+    metadatas = [
+        flatten_dict(metadata)
+        for metadata in metadatas
+    ]
 
-    data_file_paths = [
+    nested_data_file_paths = [
         list(dir_.glob("*.parquet"))
         for dir_ in dirs
     ]
     dataframes = [
         read_parquets(paths)
-        for paths in data_file_paths
+        for paths in nested_data_file_paths
     ]
     
-    index_names = ["lepton_flavor", "split"]
     index = [
-        {name: metadata.pop(name) for name in index_names} 
+        {
+            name: metadata.pop(name) 
+            for name in index_names
+        } 
         for metadata in metadatas
     ]
     dataframes = [
         df.assign(**metadata) 
-        for df, metadata in zip(dataframes, metadatas)
+        for df, metadata in zip(
+            dataframes, 
+            metadatas
+        )
     ]
 
-    keys = [tuple(i.values()) for i in index]
+    keys = [
+        tuple(i.values())
+        for i in index
+    ]
     data = concat(
         dataframes, 
         keys=keys,
         names=index_names, 
     )
     data = data.sort_index() # check this for memory usage
-    return data
+    
+    data.to_parquet(out_file_path)

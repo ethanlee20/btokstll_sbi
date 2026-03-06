@@ -26,6 +26,17 @@ class Dataset:
     ) -> int: 
         return len(self.labels)
     
+    def to_device(
+        self, 
+        device:str,
+    ) -> None:
+        self.features = self.features.to(
+            device
+        )
+        self.labels = self.labels.to(
+            device
+        ) 
+    
     @classmethod
     def from_pandas(
         cls,

@@ -5,7 +5,7 @@ from pandas import read_parquet, concat, DataFrame, Series
 
 
 def read_parquets(
-    paths:list[Path|str],
+    paths:list[Path],
 ) -> DataFrame|Series:
     
     dfs = [

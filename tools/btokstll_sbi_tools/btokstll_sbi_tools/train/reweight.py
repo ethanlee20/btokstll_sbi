@@ -10,7 +10,6 @@ def calculate_reweights_uniform(
     Calculate class weights for reweighting 
     classes to uniform distribution.
     """
-
     bin_counts = bincount(
         input=binned_labels, 
         minlength=num_bins,

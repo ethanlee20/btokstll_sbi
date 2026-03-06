@@ -1,7 +1,7 @@
 
 from numpy import ndarray
 from torch import from_numpy, Tensor
-from pandas import DataFrame, Series
+from pandas import DataFrame, Series, Index
 
 
 def are_instance(
@@ -32,10 +32,10 @@ def to_torch_tensor(
         """
         Convert a pandas dataframe to a torch tensor.
         """
-        tensor = from_numpy(dataframe.to_numpy())
+        tensor = from_numpy(dataframe.to_numpy(copy=True))
         return tensor
 
-    if isinstance(x, DataFrame|Series):
+    if isinstance(x, DataFrame|Series|Index):
         return torch_tensor_from_pandas(x)
     elif isinstance(x, ndarray):
         return from_numpy(x)
