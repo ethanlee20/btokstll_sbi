@@ -35,18 +35,24 @@ from btokstll_sbi_tools.util import (
 
 ### Config
 retrain = True
-name = "2026-03-05_try_predict_c_7_only "
+name = "2026-03-05_c_7_know_c_7_20_bins"
 main_models_dir = Path("../models")
-data_file_path =Path("../data/combo.parquet")
+data_file_path = Path("../data/combo.parquet")
 
-feature_names = ["q_squared", "cos_theta_mu", "cos_theta_k", "chi"]
-label_name = "delta_c_7"
+feature_names = [
+    # "q_squared", 
+    # "cos_theta_mu", 
+    # "cos_theta_k", 
+    # "chi", 
+    "delta_wilson_coefficient_set_delta_c_7",
+]
+label_name = "delta_wilson_coefficient_set_delta_c_7"
 binned_intervals = {
-    "delta_c_7": (-0.2, 0.2),
-    "delta_c_9": (-1.0, 0.0),
-    "delta_c_10": (0.0, 0.0),
+    "delta_wilson_coefficient_set_delta_c_7": (-0.2, 0.2),
+    "delta_wilson_coefficient_set_delta_c_9": (-1.0, 0.0),
+    "delta_wilson_coefficient_set_delta_c_10": (0.0, 0.0),
 }
-num_bins = 30
+num_bins = 20
 lr = 3e-4
 train_batch_size = 10_000
 eval_batch_size = 10_000
@@ -59,9 +65,9 @@ shuffle = True
 num_events_eval_set = 50_000
 
 plot_ticks = {
-    "delta_c_7": [-0.2, -0.1, 0, 0.1, 0.2],
-    "delta_c_9": [-2, -1, 0, 1],
-    "delta_c_10": [-1, -0.5, 0, 0.5, 1],
+    "delta_wilson_coefficient_set_delta_c_7": [-0.2, -0.1, 0, 0.1, 0.2],
+    "delta_wilson_coefficient_set_delta_c_9": [-1, -0.75, -0.5, -0.25, 0],
+    "delta_wilson_coefficient_set_delta_c_10": [-1, -0.5, 0, 0.5, 1],
 }
 
 subscript = 7
@@ -74,7 +80,7 @@ class MLP(Module):
     ):
         super().__init__()  
         self.layers = Sequential(
-            Linear(4, 16),
+            Linear(1, 16),
             ReLU(),
             Linear(16, 32),
             ReLU(),
@@ -98,10 +104,9 @@ model = MLP()
 
 device = select_device()
 
-dataframe = read_parquet(data_file_path)[feature_names + [label_name]]
-
+dataframe = read_parquet(data_file_path)[feature_names ]#+ [label_name]]
 train_dataframe = dataframe.xs("train", level="split")
-eval_dataframe = dataframe.xs("eval", level="split")
+eval_dataframe = dataframe.xs("val", level="split")
 
 reference_train_features = to_torch_tensor(
     train_dataframe[feature_names]
@@ -127,6 +132,7 @@ eval_dataset.features = eval_dataset.features.to(
 
 bin_edges = linspace(*binned_intervals[label_name], num_bins+1)
 bin_mids = bin_edges[:-1] + 0.5 * (bin_edges[1] - bin_edges[0])
+
 train_dataset.labels = bin_(
     data=train_dataset.labels, 
     bin_edges=bin_edges

@@ -33,13 +33,16 @@ class Predictor:
         self, 
         set_log_probs:Tensor, 
         bin_mids:Tensor,
-        bin_shift:int=5,
     ) -> Tensor:
+        
         bin_mids = bin_mids.to(self.device)
         set_log_probs = set_log_probs.to(self.device)
         
         def calc_expectation(log_probs):
+            bin_shift = 1 - bin_mids[0]
             log_bin_map = log(bin_mids + bin_shift)
+            if log_bin_map.isnan().any():
+                breakpoint()
             expectation = exp(logsumexp(log_bin_map + log_probs, dim=0)) - bin_shift
             return expectation
     

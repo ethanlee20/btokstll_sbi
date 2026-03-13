@@ -14,6 +14,11 @@ def calculate_reweights_uniform(
         input=binned_labels, 
         minlength=num_bins,
     )
+    if (bin_counts == 0).any():
+        raise ValueError(
+            f"Some bins are empty!"
+            f" Bin counts:\n{bin_counts}"
+        )
     inverse_bin_counts = 1 / bin_counts
     return inverse_bin_counts / sum(inverse_bin_counts)
 

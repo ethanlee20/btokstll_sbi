@@ -1,17 +1,13 @@
+*
+!*/
+
+
+# ignore these directories
 __pycache__
-.DS_Store
-.env/
-*.parquet
-*.pickle
-*.root
-*.pt
-*.np
-*.json
-*.jsonl
-*.log
-*.dec
-*.pdf
-*.png
-*.jpg
-*.zip
-*._
+.env
+
+# track these file types
+!*.py
+!*.gitignore
+!*.toml
+!readme.md
