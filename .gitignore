@@ -9,5 +9,6 @@ __pycache__
 # track these file types
 !*.py
 !*.gitignore
-!*.toml
+!pyproject.toml
 !readme.md
+!requirements.txt
