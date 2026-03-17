@@ -17,7 +17,7 @@ from btokstll_sbi_tools.train import (
     ReduceLROnPlateau_Hyperparams,
     Hyperparams,
 )
-from btokstll_sbi_tools.eval import Predictor, plot_discrete_distribution
+from btokstll_sbi_tools.eval import Predictor, plot_discrete_dist
 from btokstll_sbi_tools.util import (
     to_torch_tensor,
     bin_,
@@ -259,7 +259,7 @@ for wc in (7, 9):
     offset = abs(interval[1] - interval[0])*0.05 
     for log_p, label in zip(log_probs, eval_sets_dataset.labels):
         color = cmap(norm(label))
-        plot_discrete_distribution(ax_dist, bin_edges, log_p.cpu(), color=color, alpha=alpha)
+        plot_discrete_dist(ax_dist, bin_edges, log_p.cpu(), color=color, alpha=alpha)
     ax_expected.plot(
         [interval[0]+offset, interval[1]-offset], 
         [interval[0]+offset, interval[1]-offset], 

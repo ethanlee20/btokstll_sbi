@@ -1,13 +1,8 @@
 
 from pathlib import Path
-from dataclasses import asdict
-from json import dump
 
 from pandas import read_parquet
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.colors import CenteredNorm, Colormap, Normalize
-from matplotlib.cm import ScalarMappable
 from torch import Tensor, linspace, concatenate, unsqueeze, float32
 from torch.nn import Module, Sequential, Linear, ReLU
 
@@ -20,7 +15,7 @@ from btokstll_sbi_tools.train import (
     Hyperparams,
     Loss_Table
 )
-from btokstll_sbi_tools.eval import Predictor, plot_discrete_distribution
+from btokstll_sbi_tools.eval import Predictor, plot_predictions
 from btokstll_sbi_tools.util import (
     to_torch_tensor,
     bin_,
@@ -35,8 +30,8 @@ from btokstll_sbi_tools.util import (
 
 ### Config
 retrain = False
-name = lambda wc: f"2026-03-12_vary_c7_c9_pred_c{wc}_cond"
-main_models_dir = Path("../models")
+run_name = lambda wc: f"2026-03-12_vary_c7_c9_pred_c{wc}_cond"
+models_dir = Path("../models")
 data_file_path = lambda split: Path(f"../data/vary_c7_c9_{split}.parquet")
 feature_names = ["q_squared", "cos_theta_mu", "cos_theta_k", "chi"]
 label_name = lambda wc: f"wc_set_d_c_{wc}"
@@ -168,7 +163,7 @@ for pred_wc in (7, 9):
         binned_interval_right=binned_intervals[pred_wc][1],
     )
 
-    model_dir = main_models_dir.joinpath(name(pred_wc))
+    model_dir = models_dir.joinpath(run_name(pred_wc))
     model_file_path = model_dir.joinpath("model.pt")
 
     if retrain:
@@ -235,6 +230,8 @@ for pred_wc in (7, 9):
     log_probs = predictor.calc_log_probs()
     expected_values = predictor.calc_expected_values(log_probs, bin_mids)
 
+
+
     plt.style.use("dark_background")
     plt.rcParams.update({
         "figure.dpi": 400, 
@@ -243,47 +240,17 @@ for pred_wc in (7, 9):
         "font.serif": "Computer Modern",
 
     })
-    alpha = 0.85
-    fig, axs = plt.subplots(1, 2, figsize=(7,3), layout="constrained")
-    fig.get_layout_engine().set(wspace=0.06)
-    ax_dist = axs[0]
-    ax_expected = axs[1]
-    norm = Normalize(*binned_intervals[pred_wc])
-    cmap = mpl.colormaps["viridis"]
-    interval = binned_intervals[pred_wc]
-    offset = abs(interval[1] - interval[0])*0.05 
-    for log_p, label in zip(log_probs, eval_sets_dataset.labels):
-        color = cmap(norm(label))
-        plot_discrete_distribution(ax_dist, bin_edges, log_p.cpu(), color=color, alpha=alpha)
-    ax_expected.plot(
-        [interval[0]+offset, interval[1]-offset], 
-        [interval[0]+offset, interval[1]-offset], 
-        color="grey", 
-        zorder=-10, 
-        alpha=0.5, 
-        linestyle="--",
-    )
-    ax_expected.scatter(
-        eval_sets_dataset.labels, 
+    plot_file_path = Path(f"../plots/{run_name}_preds.png")
+    plot_predictions(
+        bin_edges, 
+        log_probs, 
         expected_values, 
-        color=cmap(norm(eval_sets_dataset.labels)), 
-        alpha=alpha
+        eval_dataset.labels, 
+        pred_wc, 
+        plot_file_path, 
+        cond_wc_index=cond_wc,
     )
-    ax_dist.set_xticks(plot_ticks[pred_wc])
-    ax_expected.set_xticks(plot_ticks[pred_wc])
-    ax_expected.set_yticks(plot_ticks[pred_wc])
-    # cbar = plt.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax_dist)
-    # cbar.set_ticks(range(num_bins))
-    # cbar.set_label(r"Actual $\delta C_9$ Bin", fontsize=15)
-    ax_dist.set_xlabel(r"$\delta C_{" f"{pred_wc}" r"}$", fontsize=13)
-    ax_dist.set_ylabel(r"$\log P(\delta C_{" f"{pred_wc}" r"} \, | \, \delta C_{" f"{cond_wc}" r"},\,\textrm{dataset})$", fontsize=13)
-    ax_expected.set_xlabel(r"Actual $\delta C_{" f"{pred_wc}" r"}$", fontsize=13)
-    ax_expected.set_ylabel(r"Predicted $\delta C_{" f"{pred_wc}" r"}$", fontsize=13)
-    plt.savefig(
-        model_dir.joinpath(f"preds.png"), 
-        bbox_inches="tight"
-    )
-    plt.close()
+
 
 
 
