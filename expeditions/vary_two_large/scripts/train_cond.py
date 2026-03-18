@@ -3,13 +3,15 @@ from pathlib import Path
 
 from pandas import read_parquet
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import close, savefig, subplots
 from torch import Tensor, linspace, concatenate, unsqueeze, float32
-from torch.nn import Module, Sequential, Linear, ReLU
+from torch.nn import Module, Sequential, Linear, ReLU, Dropout
 
 from btokstll_sbi_tools.train import (
     train,
     calculate_reweights_uniform,
     Adam_Hyperparams,
+    AdamW_Hyperparams,
     CrossEntropyLoss_Hyperparams,
     ReduceLROnPlateau_Hyperparams,
     Hyperparams,
@@ -27,10 +29,19 @@ from btokstll_sbi_tools.util import (
     std_scale,
 )
 
+plt.style.use("dark_background")
+plt.rcParams.update({
+    "figure.dpi": 400, 
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": "Computer Modern",
+
+})
+
 
 ### Config
-retrain = False
-run_name = lambda wc: f"2026-03-12_vary_c7_c9_pred_c{wc}_cond"
+retrain = True
+run_name = lambda wc: f"2026-03-18_vary_c7_c9_pred_c{wc}_cond_v14"
 models_dir = Path("../models")
 data_file_path = lambda split: Path(f"../data/vary_c7_c9_{split}.parquet")
 feature_names = ["q_squared", "cos_theta_mu", "cos_theta_k", "chi"]
@@ -40,17 +51,18 @@ binned_intervals = {
     7: (-1, 1),
     9: (-10, 0),
 }
-num_bins = 30
+num_bins = 10
 lr = 3e-4
 train_batch_size = 10_000
 eval_batch_size = 10_000
-epochs = range(0, 300)
-lr_scheduler_factor = 0.95
+epochs = range(0, 600)
+lr_scheduler_factor = 0.9999
 lr_scheduler_patience = 0
 lr_scheduler_treshold = 0
 lr_scheduler_eps = 0
 shuffle = True
 num_events_eval_set = 25_000
+weight_decay = 0.5
 
 plot_ticks = {
     7: [-1, 0, 1],
@@ -65,22 +77,24 @@ class MLP(Module):
     ):
         super().__init__()  
         self.layers = Sequential(
-            Linear(5, 16),
+            Linear(5, 32),
             ReLU(),
-            Linear(16, 32),
+            Linear(32, 64),
             ReLU(),
-            Linear(32, 32),
+            Linear(64, 64),
             ReLU(),
-            Linear(32, num_bins),
         )
+        self.predict_c9 = Linear(64, num_bins)
+        self.predict_c7 = Linear(64, num_bins)
 
     def forward(
         self, 
         x:Tensor,
     ) -> Tensor:
-        
         logits = self.layers(x)
-        return logits
+        c9_prediction = self.predict_c9(logits)
+        c7_prediction = self.predict_c7(logits)
+        return c7_prediction, c9_prediction
 
 
 for pred_wc in (7, 9):
@@ -142,8 +156,9 @@ for pred_wc in (7, 9):
     )
 
     hyperparams = Hyperparams(
-        optimizer=Adam_Hyperparams(
-            lr=lr
+        optimizer=AdamW_Hyperparams(
+            lr=lr,
+            weight_decay=weight_decay,
         ),
         train_batch_size=train_batch_size,
         eval_batch_size=eval_batch_size,
@@ -180,6 +195,20 @@ for pred_wc in (7, 9):
             path=model_file_path
         )
         loss_table.save_table_as_json(model_dir.joinpath("loss.json"))
+
+        # plot loss
+        colors = {"train": "goldenrod", "eval": "skyblue"}
+        loss_dict = loss_table.as_lists()
+        loss_dict["epochs"] = [int(ep) for ep in loss_dict["epochs"]]
+        fig, ax = subplots(figsize=(5,4))
+        for split in ("train", "eval"):
+            ax.scatter(loss_dict["epochs"], loss_dict[split], label=split, s=1, color=colors[split])
+        ax.set_ylabel("Cross Entropy Loss", fontsize=13)
+        ax.set_xlabel("Epoch", fontsize=13)
+        ax.legend(fontsize=13, markerscale=5)
+        savefig(f"../plots/{run_name(pred_wc)}_loss.png", bbox_inches="tight")
+        close()
+
         # hyperparams_dict = asdict(hyperparams)
         # with open(model_dir.joinpath("hyperparams.json"), 'x') as f:
         #     dump(hyperparams_dict, f)
@@ -232,20 +261,13 @@ for pred_wc in (7, 9):
 
 
 
-    plt.style.use("dark_background")
-    plt.rcParams.update({
-        "figure.dpi": 400, 
-        "text.usetex": True,
-        "font.family": "serif",
-        "font.serif": "Computer Modern",
 
-    })
-    plot_file_path = Path(f"../plots/{run_name}_preds.png")
+    plot_file_path = Path(f"../plots/{run_name(pred_wc)}_preds.png")
     plot_predictions(
-        bin_edges, 
-        log_probs, 
-        expected_values, 
-        eval_dataset.labels, 
+        bin_edges.cpu(), 
+        log_probs.cpu(), 
+        expected_values.cpu(), 
+        eval_sets_dataset.labels.cpu(), 
         pred_wc, 
         plot_file_path, 
         cond_wc_index=cond_wc,
