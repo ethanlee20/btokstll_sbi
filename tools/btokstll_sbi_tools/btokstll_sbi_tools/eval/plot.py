@@ -85,7 +85,7 @@ def plot_linearity(
         alpha=0.5, 
         linestyle="--",
     )
-    
+
     # scatter
     ax.scatter(
         labels, 

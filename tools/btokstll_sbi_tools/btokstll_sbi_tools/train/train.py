@@ -4,13 +4,14 @@ from types import NoneType
 
 from torch import Tensor, no_grad
 from torch.nn import Module, CrossEntropyLoss
-from torch.optim import Optimizer, Adam
+from torch.optim import Optimizer, Adam, AdamW
 from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 
 from ..util import get_model_current_device, Dataset
 from .data_loader import Data_Loader
 from .hyperparams import (
     Adam_Hyperparams,
+    AdamW_Hyperparams,
     CrossEntropyLoss_Hyperparams, 
     ReduceLROnPlateau_Hyperparams,
     Hyperparams
@@ -123,6 +124,7 @@ def _train_evaluate_epoch(
 
 _available_optimizers = {
     Adam_Hyperparams: Adam,
+    AdamW_Hyperparams : AdamW,
 }
 
 

@@ -1,6 +1,7 @@
 from .train import train
 from .hyperparams import (
     Adam_Hyperparams,
+    AdamW_Hyperparams,
     CrossEntropyLoss_Hyperparams,
     ReduceLROnPlateau_Hyperparams,
     Hyperparams

@@ -41,7 +41,7 @@ plt.rcParams.update({
 
 ### Config
 retrain = True
-run_name = lambda wc: f"2026-03-18_vary_c7_c9_pred_c{wc}_cond_v14"
+run_name = lambda wc: f"2026-03-18_vary_c7_c9_pred_c{wc}_cond_v15"
 models_dir = Path("../models")
 data_file_path = lambda split: Path(f"../data/vary_c7_c9_{split}.parquet")
 feature_names = ["q_squared", "cos_theta_mu", "cos_theta_k", "chi"]
@@ -114,12 +114,12 @@ for pred_wc in (7, 9):
     reference_train_features = to_torch_tensor(train_dataframe[feature_names + [cond_label]]).to(float32) ###
     train_dataset = Dataset.from_pandas(
         features=train_dataframe[feature_names + [cond_label]],
-        labels=train_dataframe[label]
+        labels=train_dataframe[[label, cond_label]]
     )
     eval_dataframe = read_parquet(data_file_path("val"))[columns]
     eval_dataset = Dataset.from_pandas(
         features=eval_dataframe[feature_names + [cond_label]],
-        labels=eval_dataframe[label]
+        labels=eval_dataframe[[label, cond_label]]
     )
 
     train_dataset.features = train_dataset.features.to(

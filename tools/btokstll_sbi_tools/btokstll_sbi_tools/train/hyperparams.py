@@ -8,6 +8,15 @@ from torch import Tensor
 class Adam_Hyperparams:
     lr: float = 0.001
 
+    
+
+@dataclass
+class AdamW_Hyperparams:
+    lr: float = 0.001
+    weight_decay: float = 1e-2
+
+
+
 
 @dataclass
 class CrossEntropyLoss_Hyperparams:
@@ -24,7 +33,7 @@ class ReduceLROnPlateau_Hyperparams:
 
 @dataclass
 class Hyperparams:
-    optimizer: Adam_Hyperparams
+    optimizer: Adam_Hyperparams | AdamW_Hyperparams
     train_batch_size: int
     eval_batch_size: int
     shuffle: bool
