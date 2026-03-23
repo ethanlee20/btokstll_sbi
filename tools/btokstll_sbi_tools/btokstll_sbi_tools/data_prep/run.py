@@ -1,12 +1,13 @@
 
-from .angular import calculate_B_to_K_star_l_l_features
-from .combine import combine_files
+from argparse import ArgumentParser
+from pathlib import Path
+
+from pandas import read_parquet
+
+from .util import calculate_B_to_K_star_l_l_features, combine_files
+
 
 if __name__ == "__main__":
-
-    from argparse import ArgumentParser
-    from pathlib import Path
-    from pandas import read_parquet
 
     parser = ArgumentParser(
         description="Process generator output."
