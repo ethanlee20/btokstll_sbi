@@ -1,6 +1,6 @@
 
-from .calculation import calculate_B_to_K_star_l_l_features
-from .generation import combine_files
+from .angular import calculate_B_to_K_star_l_l_features
+from .combine import combine_files
 
 if __name__ == "__main__":
 
