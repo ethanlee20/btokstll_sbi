@@ -16,7 +16,7 @@ from torch.nn import Module, CrossEntropyLoss
 from torch.optim import Optimizer, Adam, AdamW
 from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 
-from ..util import are_instance, dump_json, load_json
+from ..util import are_instance, dump_json, load_json, Interval
 from .util import Dataset, get_model_current_device
 
 
@@ -125,12 +125,11 @@ class Hyperparams:
     train_batch_size: int
     eval_batch_size: int
     shuffle: bool
-    epochs: range
+    epochs: Interval
     loss_fn: CrossEntropyLoss_Hyperparams
     lr_scheduler: ReduceLROnPlateau_Hyperparams|None
     num_bins: int
-    binned_interval_left: float
-    binned_interval_right: float
+    binned_interval: Interval
 
 
 

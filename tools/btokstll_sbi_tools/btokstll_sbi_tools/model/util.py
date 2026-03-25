@@ -13,11 +13,14 @@ from torch import (
     abs, 
     mean, 
     std, 
+    linspace,
     bucketize, 
     from_numpy
 )
 from torch.nn import Module
 from pandas import read_parquet, DataFrame, Series, Index
+
+from ..util import Interval
 
 
 def select_device(
@@ -42,26 +45,36 @@ def get_model_current_device(
     return device
 
 
+def torch_tensor_from_pandas(
+    dataframe:DataFrame|Series|Index, 
+    dtype:str|None=None,
+) -> Tensor:
+    """
+    Convert a pandas dataframe to a torch tensor.
+    """
+    tensor = from_numpy(
+        dataframe.to_numpy(
+            dtype=dtype, 
+            copy=True,
+        )
+    )
+    return tensor
 
-def to_torch_tensor(
-    x,
-):
-    """Convert to torch tensor."""
-    
-    def torch_tensor_from_pandas(dataframe):
-        """
-        Convert a pandas dataframe to a torch tensor.
-        """
-        tensor = from_numpy(dataframe.to_numpy(copy=True))
-        return tensor
 
-    if isinstance(x, DataFrame|Series|Index):
-        return torch_tensor_from_pandas(x)
-    elif isinstance(x, ndarray):
-        return from_numpy(x)
-    elif isinstance(x, Tensor):
-        return x
-    else: raise ValueError(f"Unsupported type: {type(x)}")
+# def to_torch_tensor(
+#     x:ndarray|DataFrame|Series|Index|Tensor,
+#     dtype:str,
+# ) -> Tensor:
+#     """
+#     Convert to torch tensor.
+#     """
+#     if isinstance(x, DataFrame|Series|Index):
+#         return _torch_tensor_from_pandas(x, dtype)
+#     elif isinstance(x, ndarray):
+#         return from_numpy(x)
+#     elif isinstance(x, Tensor):
+#         return x
+#     else: raise ValueError(f"Unsupported type: {type(x)}")
 
 
 
@@ -116,63 +129,71 @@ class Dataset:
     def from_pandas(
         cls,
         features:DataFrame|Series,
-        labels:DataFrame|Series
+        labels:DataFrame|Series,
+        features_dtype:str|None=None,
+        labels_dtype:str|None=None,
     ):
-        features_tensor = to_torch_tensor(features)
-        labels_tensor = to_torch_tensor(labels)
+        features_tensor = torch_tensor_from_pandas(
+            features, 
+            dtype=features_dtype,
+        )
+        labels_tensor = torch_tensor_from_pandas(
+            labels, 
+            dtype=labels_dtype,
+        )
         return cls(
             features=features_tensor, 
             labels=labels_tensor
         )
     
-    @classmethod
-    def from_dataframe_parquet_file(
-        cls, 
-        path:Path|str, 
-        feature_names:list[str], 
-        label_name:str
-    ):
-        df = read_parquet(path)
-        features = to_torch_tensor(
-            df[feature_names]
-        )
-        labels = to_torch_tensor(
-            df[label_name]
-        )
-        return cls(
-            features=features, 
-            labels=labels,
-        )
+    # @classmethod
+    # def from_dataframe_parquet_file(
+    #     cls, 
+    #     path:Path|str, 
+    #     feature_names:list[str], 
+    #     label_name:str
+    # ):
+    #     df = read_parquet(path)
+    #     features = torch_tensor_from_pandas(
+    #         df[feature_names]
+    #     )
+    #     labels = torch_tensor_from_pandas(
+    #         df[label_name]
+    #     )
+    #     return cls(
+    #         features=features, 
+    #         labels=labels,
+    #     )
 
 
-@dataclass
-class Dataset_Set:
+# @dataclass
+# class Dataset_Set:
     
-    train: Dataset
-    eval: Dataset
+#     train: Dataset
+#     eval: Dataset
 
-    @classmethod
-    def from_dataframe_parquet_files(
-        cls,
-        train_file_path:Path|str,
-        eval_file_path:Path|str,
-        feature_names:list[str],
-        label_name:str,
-    ):
-        train = Dataset.from_dataframe_parquet_file(
-            train_file_path, 
-            feature_names=feature_names,
-            label_name=label_name,
-        )
-        eval = Dataset.from_dataframe_parquet_file(
-            eval_file_path, 
-            feature_names=feature_names,
-            label_name=label_name,
-        )
-        return cls(
-            train=train, 
-            eval=eval,
-        )
+#     @classmethod
+#     def from_dataframe_parquet_files(
+#         cls,
+#         train_file_path:Path|str,
+#         eval_file_path:Path|str,
+#         feature_names:list[str],
+#         label_name:str,
+#     ):
+#         train = Dataset.from_dataframe_parquet_file(
+#             train_file_path, 
+#             feature_names=feature_names,
+#             label_name=label_name,
+#         )
+#         eval = Dataset.from_dataframe_parquet_file(
+#             eval_file_path, 
+#             feature_names=feature_names,
+#             label_name=label_name,
+#         )
+#         return cls(
+#             train=train, 
+#             eval=eval,
+#         )
     
 
 def std_scale(
@@ -189,26 +210,41 @@ def std_scale(
     return (data - var_means) / var_stds
 
 
-def bin_(
+def make_bins(
+    interval:Interval,
+    num_bins:int,
+) -> tuple[Tensor, Tensor]:
+    bin_edges = linspace(
+        *interval,
+        num_bins+1,
+    )
+    bin_mids = (
+        bin_edges[:-1] + 0.5 
+        * (bin_edges[1] - bin_edges[0])
+    )
+    return bin_edges, bin_mids
+
+
+def to_bins(
     data:Tensor,
     bin_edges:Tensor,
     eps:float=1e-2
 ) -> Tensor:
-    
-    if any((data < bin_edges[0]) | (data > bin_edges[-1])):
+    if any(
+        (data < bin_edges[0]) 
+        | (data > bin_edges[-1])
+    ):
         raise ValueError(
             "Data outside of binned interval."
         )
     
     bin_edges[0] -= abs(Tensor([eps])).item()
-
     binned_data = bucketize(
         input=data, 
         boundaries=bin_edges, 
         out_int32=False, 
         right=False
     ) - 1
-
     return binned_data
 
 

@@ -3,17 +3,78 @@ from pathlib import Path
 
 from numpy import linspace
 from matplotlib import colormaps
-from matplotlib.pyplot import subplots, savefig, close
+from matplotlib.pyplot import subplots
 from matplotlib.colors import Normalize
 from torch import no_grad, sum, log, exp, logsumexp, Tensor
 from torch.nn import Module
 from torch.nn.functional import log_softmax
 
 from .util import Dataset, plot_discrete_dist
+from ..util import save_plot_and_close
+
+
+def _calc_log_probs(
+    logits:Tensor,
+    dim:int,
+) -> Tensor:
+    return log_softmax(
+        logits, 
+        dim=dim,
+    )
+
+
+def _calc_set_logits(
+    event_logits:Tensor
+) -> Tensor:
+    event_log_probs = _calc_log_probs(
+        event_logits,
+        dim=2,
+    )
+    return sum(
+        event_log_probs, 
+        dim=1
+    )
+
+
+def _calc_set_log_probs(
+    event_logits:Tensor,
+) -> Tensor:
+    set_logits = _calc_set_logits(
+        event_logits,
+    )
+    return _calc_log_probs(
+        set_logits, 
+        dim=1,
+    )
+
+
+def _shift_to_positive(
+    a:Tensor
+) -> tuple[Tensor, Tensor]:
+    shift = 1 - a.min()
+    return a + shift, shift
+
+
+def _calc_expected_value(
+    log_probs:Tensor, 
+    bin_mids:Tensor
+) -> Tensor:
+    shifted_bin_mids, shift = _shift_to_positive(
+        bin_mids
+    )
+    log_shifted_bin_mids = log(
+        shifted_bin_mids
+    )
+    return exp(
+        logsumexp(
+            log_shifted_bin_mids 
+            + log_probs, 
+            dim=0
+        )
+    ) - shift
 
 
 class Predictor:
-
     def __init__(
         self, 
         model:Module, 
@@ -30,33 +91,20 @@ class Predictor:
     ) -> Tensor:
         with no_grad():
             event_logits = self.model(self.dataset.features)
-            event_log_probs = log_softmax(event_logits, dim=2)
-            set_logits = sum(event_log_probs, dim=1)
-            set_log_probs = log_softmax(set_logits, dim=1)
-            return set_log_probs
+            return _calc_set_log_probs(event_logits)
         
     def calc_expected_values(
         self, 
         set_log_probs:Tensor, 
         bin_mids:Tensor,
     ) -> Tensor:
-        
         bin_mids = bin_mids.to(self.device)
         set_log_probs = set_log_probs.to(self.device)
-        
-        def calc_expectation(log_probs):
-            bin_shift = 1 - bin_mids[0]
-            log_bin_map = log(bin_mids + bin_shift)
-            if log_bin_map.isnan().any():
-                breakpoint()
-            expectation = exp(logsumexp(log_bin_map + log_probs, dim=0)) - bin_shift
-            return expectation
-    
         with no_grad():
             expected_values = Tensor(
-                [calc_expectation(log_p) for log_p in set_log_probs]
+                [_calc_expected_value(log_p, bin_mids) for log_p in set_log_probs]
             )
-            return expected_values
+        return expected_values
 
 
 def plot_discrete_dists(
@@ -70,7 +118,6 @@ def plot_discrete_dists(
     axis_label_font_size=13, 
     alpha=0.85,
 ) -> None:
-    
     for dist, color in zip(dists, colors):
         plot_discrete_dist(
             ax, 
@@ -79,14 +126,12 @@ def plot_discrete_dists(
             color=color, 
             alpha=alpha,
         )
-
     ticks = linspace(
         bin_edges[0], 
         bin_edges[-1],
         num=num_xticks,
     )
     ax.set_xticks(ticks)
-
     ax.set_xlabel(
         xlabel, 
         fontsize=axis_label_font_size,
@@ -109,7 +154,6 @@ def plot_linearity(
     alpha=0.85,
     axis_label_fontsize=13,
 ) -> None:
-    
     # diagonal line
     offset = abs(
         interval[1] - interval[0]
@@ -122,7 +166,6 @@ def plot_linearity(
         alpha=0.5, 
         linestyle="--",
     )
-
     # scatter
     ax.scatter(
         labels, 
@@ -163,7 +206,6 @@ def plot_predictions(
     num_ticks=4,
     axis_label_fontsize=13,
 ) -> None:
-
     fig, axs = subplots(
         1, 
         2, 
@@ -172,9 +214,7 @@ def plot_predictions(
     )
     dist_ax = axs[0]
     lin_ax = axs[1]
-    
     fig.get_layout_engine().set(wspace=wspace)
-
     norm = Normalize(
         bin_edges[0], 
         bin_edges[-1],
@@ -185,7 +225,6 @@ def plot_predictions(
             unbinned_labels
         )
     )
-
     # distributions plot    
     ylabel = (
         r"$\log P(\delta C_{" 
@@ -215,7 +254,6 @@ def plot_predictions(
         axis_label_font_size=axis_label_fontsize,
         alpha=alpha,
     )
-
     # linearity plot
     interval = (bin_edges[0], bin_edges[-1])
     xlabel = (
@@ -240,9 +278,4 @@ def plot_predictions(
         alpha=alpha, 
         axis_label_fontsize=axis_label_fontsize,
     ) 
-
-    savefig(
-        out_path, 
-        bbox_inches="tight",
-    )
-    close()
+    save_plot_and_close(out_path)

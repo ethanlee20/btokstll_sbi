@@ -9,43 +9,49 @@ from matplotlib.colors import Normalize
 from torch import Tensor, linspace, concatenate, unsqueeze, float32
 from torch.nn import Module, Sequential, Linear, ReLU
 
-from btokstll_sbi_tools.train import (
+from btokstll_sbi_tools.model import (
     train,
     calculate_reweights_uniform,
-    Adam_Hyperparams,
+    AdamW_Hyperparams,
     CrossEntropyLoss_Hyperparams,
     ReduceLROnPlateau_Hyperparams,
     Hyperparams,
-)
-from btokstll_sbi_tools.eval import Predictor, plot_discrete_dist
-from btokstll_sbi_tools.util import (
-    to_torch_tensor,
-    bin_,
-    Dataset, 
-    load_torch_model_state_dict,
-    save_torch_model_state_dict,
+    Predictor, 
+    plot_predictions,
     select_device,
+    torch_tensor_from_pandas,
+    Dataset,
+    make_bins,
+    to_bins,
     std_scale,
+    save_torch_model_state_dict,
+    load_torch_model_state_dict,
+)
+from btokstll_sbi_tools.util import (
+    Interval,
+    save_plot_and_close, 
+    setup_dark_plotting,
 )
 
 
-### Config
-retrain = True
-name = lambda wc: f"pred_c{wc}_vary_c{wc}_big_model"
-models_dir = Path("../models")
-data_file_path = lambda wc, split: Path(f"../data/vary_c_{wc}_{split}.parquet")
+setup_dark_plotting()
+
+run_name = lambda wc: f"pred_c{wc}_vary_c{wc}_big_model"
+models_dir = Path("models")
+data_file_path = lambda wc, split: Path(f"data/vary_c_{wc}_{split}.parquet")
 feature_names = ["q_squared", "cos_theta_mu", "cos_theta_k", "chi"]
-label_name = lambda wc: f"wc_set_d_c_{wc}"
-bound_label = lambda wc, left_or_right: f"wc_dist_d_c_{wc}_{left_or_right}"
+wc_name = lambda wc: f"wc_set_d_c_{wc}"
+bound_name = lambda wc, left_or_right: f"wc_dist_d_c_{wc}_{left_or_right}"
+retrain = True
 binned_intervals = {
-    7: (-1, 1),
-    9: (-10, 0),
+    7: Interval(-1.0, 1.0),
+    9: Interval(-10.0, 0.0),
 }
 num_bins = 30
 lr = 3e-4
 train_batch_size = 10_000
 eval_batch_size = 10_000
-epochs = range(0, 300)
+epochs = Interval(0, 200)
 lr_scheduler_factor = 0.95
 lr_scheduler_patience = 0
 lr_scheduler_treshold = 0
@@ -53,80 +59,63 @@ lr_scheduler_eps = 0
 shuffle = True
 num_events_eval_set = 25_000
 
-plot_ticks = {
-    7: [-1, 0, 1],
-    9: [-10, -5, 0],
-}
-###
-
-plt.style.use("dark_background")
-plt.rcParams.update({
-    "figure.dpi": 400, 
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.serif": "Computer Modern",
-
-})
-
 class MLP(Module):
-
     def __init__(
         self,
     ):
         super().__init__()  
         self.layers = Sequential(
-            Linear(4, 160),
+            Linear(4, 16),
             ReLU(),
-            Linear(160, 320),
+            Linear(16, 32),
             ReLU(),
-            Linear(320, 320),
+            Linear(32, 32),
             ReLU(),
-            Linear(320, num_bins),
+            Linear(32, num_bins),
         )
-
     def forward(
         self, 
         x:Tensor,
     ) -> Tensor:
-        
         logits = self.layers(x)
         return logits
 
-
 for wc in (7, 9):
-
     model = MLP()
-
     device = select_device()
 
-    columns = feature_names + [label_name(wc)]
+    columns = feature_names + [wc_name(wc)]
+    train_dataframe = read_parquet(
+        data_file_path(wc, "train")
+    )[columns]
+    eval_dataframe = read_parquet(
+        data_file_path(wc, "val")
+    )[columns]
 
-    train_dataframe = read_parquet(data_file_path(wc, "train"))[columns]
-    reference_train_features = to_torch_tensor(train_dataframe[feature_names]).to(float32) ###
+    reference_train_features = torch_tensor_from_pandas(
+        train_dataframe[feature_names],
+        dtype="float32"
+    )
     train_dataset = Dataset.from_pandas(
         features=train_dataframe[feature_names],
-        labels=train_dataframe[label_name(wc)]
+        labels=train_dataframe[wc_name(wc)],
+        features_dtype="float32",
     )
-    eval_dataframe = read_parquet(data_file_path(wc, "val"))[columns]
     eval_dataset = Dataset.from_pandas(
         features=eval_dataframe[feature_names],
-        labels=eval_dataframe[label_name(wc)]
+        labels=eval_dataframe[wc_name(wc)],
+        features_dtype="float32",
     )
 
-    train_dataset.features = train_dataset.features.to(
-        float32
+    bin_edges, bin_mids = make_bins(
+        binned_intervals[wc], 
+        num_bins,
     )
-    eval_dataset.features = eval_dataset.features.to(
-        float32
-    )
-
-    bin_edges = linspace(*binned_intervals[wc], num_bins+1)
-    bin_mids = bin_edges[:-1] + 0.5 * (bin_edges[1] - bin_edges[0])
-    train_dataset.labels = bin_(
+    train_dataset.labels = to_bins(
         data=train_dataset.labels, 
         bin_edges=bin_edges
     )
-    eval_dataset.labels = bin_(
+    eval_dataset.labels = to_bins(
         data=eval_dataset.labels, 
         bin_edges=bin_edges
     )
@@ -134,8 +123,7 @@ for wc in (7, 9):
     reweights = calculate_reweights_uniform(
         binned_labels=train_dataset.labels,
         num_bins=num_bins
-    )
-    reweights = reweights.to(device)
+    ).to(device)
 
     train_dataset.features = std_scale(
         data=train_dataset.features, 
@@ -147,7 +135,7 @@ for wc in (7, 9):
     )
 
     hyperparams = Hyperparams(
-        optimizer=Adam_Hyperparams(
+        optimizer=AdamW_Hyperparams(
             lr=lr
         ),
         train_batch_size=train_batch_size,
@@ -168,7 +156,7 @@ for wc in (7, 9):
         binned_interval_right=binned_intervals[wc][1],
     )
 
-    model_dir = models_dir.joinpath(name(wc))
+    model_dir = models_dir.joinpath(run_name(wc))
     model_file_path = model_dir.joinpath("model.pt")
 
     if retrain:
@@ -182,10 +170,11 @@ for wc in (7, 9):
         )
         save_torch_model_state_dict(
             model=model, 
-            path=model_file_path
+            path=model_file_path,
         )
         loss_table.save_table_as_json(model_dir.joinpath("loss.json"))
-        # hyperparams_dict = asdict(hyperparams)
+        hyperparams_dict = asdict(hyperparams)
+
         # with open(model_dir.joinpath("hyperparams.json"), 'x') as f:
         #     dump(hyperparams_dict, f)
         loss_dict = loss_table.as_lists()
@@ -197,7 +186,7 @@ for wc in (7, 9):
         ax.set_ylabel("Cross Entropy Loss", fontsize=13)
         ax.set_xlabel("Epoch", fontsize=13)
         ax.legend(fontsize=13, markerscale=5)
-        savefig(Path("../plots/").joinpath(f"loss_{name(wc)}"), bbox_inches="tight")
+        savefig(Path("../plots/").joinpath(f"loss_{run_name(wc)}"), bbox_inches="tight")
         close()
 
     else:
@@ -220,7 +209,7 @@ for wc in (7, 9):
         ]
     )
     eval_sets_labels = to_torch_tensor(
-        eval_dataframe[label_name(wc)].groupby(
+        eval_dataframe[wc_name(wc)].groupby(
             level="trial_num"
         ).first()
     )

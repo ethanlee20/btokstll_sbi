@@ -6,7 +6,7 @@ from pandas import DataFrame, Series, concat, read_parquet
 from uproot import open
 from tqdm import tqdm
 
-from ..util import flatten_dict, load_json
+from .util import flatten_dict, load_json
 
 
 def square_matrix_transform(matrix_dataframe, vector_dataframe):
@@ -790,7 +790,7 @@ def calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
     return difference_series
 
 
-def calculate_B_to_K_star_l_l_features(dataframe, lepton_flavor):
+def _calculate_B_to_K_star_l_l_features(dataframe, lepton_flavor):
 
     """
     Calculate detecor and generator level variables of B -> K* l+ l- decays.
@@ -930,14 +930,11 @@ def _open_simulated_data_root_file(
         "persistent;2"
     ],
 ) -> DataFrame:
-    
     """
     Open a simulated data root file as a pandas dataframe.
     Each tree will be labeled by a pandas multi-index.
     """
-
     with open(path) as file:
-
         keys = [
             key.split(";")[0] for key in file.keys() 
             if key not in unwanted_keys
@@ -946,7 +943,6 @@ def _open_simulated_data_root_file(
             file[key].arrays(library="pd") 
             for key in keys
         ]
-
     dataframe = concat(
         tree_dataframes, 
         keys=keys,
@@ -991,7 +987,7 @@ def _root_files_to_parquet(
         _root_to_parquet(path)
 
 
-def combine_files(
+def _combine_files(
     dirs:list[Path],
     out_file_path:Path|str,
     index_names:list[str]=[
@@ -1000,7 +996,6 @@ def combine_files(
         "split",
     ]
 ) -> None:
-    
     for dir_ in dirs:
         if not dir_.is_dir():
             raise ValueError(
@@ -1045,7 +1040,6 @@ def combine_files(
         flatten_dict(metadata)
         for metadata in metadatas
     ]
-
     nested_data_file_paths = [
         list(dir_.glob("*.parquet"))
         for dir_ in dirs
@@ -1054,7 +1048,6 @@ def combine_files(
         _read_pandas_parquets(paths)
         for paths in nested_data_file_paths
     ]
-    
     index = [
         {
             name: metadata.pop(name) 
@@ -1069,7 +1062,6 @@ def combine_files(
             metadatas
         )
     ]
-
     keys = [
         tuple(i.values())
         for i in index
@@ -1080,5 +1072,19 @@ def combine_files(
         names=index_names, 
     )
     data = data.sort_index() # check this for memory usage
-    
     data.to_parquet(out_file_path)
+
+
+def prep_data(
+    in_data_dir:Path,
+    out_file_path:Path,      
+) -> None:
+    for p in in_data_dir.rglob("._*"):
+        p.unlink()
+    _combine_files(
+        list(in_data_dir.glob("*/")),
+        out_file_path=out_file_path,
+    )
+    df = read_parquet(out_file_path)
+    df = _calculate_B_to_K_star_l_l_features(df, "mu")
+    df.to_parquet(out_file_path)
