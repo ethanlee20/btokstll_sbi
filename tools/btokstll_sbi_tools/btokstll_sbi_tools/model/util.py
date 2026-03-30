@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict, astuple
 
 from numpy import array, repeat, ndarray
 from torch import (
@@ -15,7 +15,8 @@ from torch import (
     std, 
     linspace,
     bucketize, 
-    from_numpy
+    from_numpy, 
+    bincount,
 )
 from torch.nn import Module
 from pandas import read_parquet, DataFrame, Series, Index
@@ -46,14 +47,14 @@ def get_model_current_device(
 
 
 def torch_tensor_from_pandas(
-    dataframe:DataFrame|Series|Index, 
+    obj:DataFrame|Series|Index, 
     dtype:str|None=None,
 ) -> Tensor:
     """
     Convert a pandas dataframe to a torch tensor.
     """
     tensor = from_numpy(
-        dataframe.to_numpy(
+        obj.to_numpy(
             dtype=dtype, 
             copy=True,
         )
@@ -96,11 +97,79 @@ def load_torch_model_state_dict(
     return state_dict
 
 
+def std_scale(
+    data:Tensor, 
+    means:Tensor, 
+    stdevs:Tensor,
+):
+    return (data - means) / stdevs
+
+
+def make_bins(
+    interval:Interval,
+    num_bins:int,
+) -> tuple[Tensor, Tensor]:
+    bin_edges = linspace(
+        interval.left,
+        interval.right,
+        num_bins+1,
+    )
+    bin_mids = (
+        bin_edges[:-1] + 0.5 
+        * (bin_edges[1] - bin_edges[0])
+    )
+    return bin_edges, bin_mids
+
+
+def to_bins(
+    data:Tensor,
+    bin_edges:Tensor,
+    eps:float=1e-2
+) -> Tensor:
+    if any(
+        (data < bin_edges[0]) 
+        | (data > bin_edges[-1])
+    ):
+        raise ValueError(
+            "Data outside of binned interval."
+        )
+    bin_edges[0] -= abs(Tensor([eps])).item()
+    binned_data = bucketize(
+        input=data, 
+        boundaries=bin_edges, 
+        out_int32=False, 
+        right=False
+    ) - 1
+    return binned_data
+
+
+def calc_bin_reweights(
+    binned_labels:Tensor,
+    num_bins:int,
+) -> Tensor:
+    """
+    Calculate class weights for reweighting 
+    classes to uniform distribution.
+    """
+    bin_counts = bincount(
+        input=binned_labels, 
+        minlength=num_bins,
+    )
+    if (bin_counts == 0).any():
+        raise ValueError(
+            f"Some bins are empty!"
+            f" Bin counts:\n{bin_counts}"
+        )
+    inverse_bin_counts = 1 / bin_counts
+    return inverse_bin_counts / sum(inverse_bin_counts)
+
+
 @dataclass
 class Dataset:
     features: Tensor
     labels: Tensor
-    
+    trials:Tensor
+
     def __postinit__(
         self,
     ):
@@ -130,8 +199,10 @@ class Dataset:
         cls,
         features:DataFrame|Series,
         labels:DataFrame|Series,
+        trials:Series|Index,
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
+        trials_dtype:str|None="int64",
     ):
         features_tensor = torch_tensor_from_pandas(
             features, 
@@ -141,111 +212,168 @@ class Dataset:
             labels, 
             dtype=labels_dtype,
         )
+        trials_tensor = torch_tensor_from_pandas(
+            trials,
+            dtype=trials_dtype,
+        )
         return cls(
             features=features_tensor, 
-            labels=labels_tensor
+            labels=labels_tensor,
+            trials=trials_tensor,
         )
     
-    # @classmethod
-    # def from_dataframe_parquet_file(
-    #     cls, 
-    #     path:Path|str, 
-    #     feature_names:list[str], 
-    #     label_name:str
-    # ):
-    #     df = read_parquet(path)
-    #     features = torch_tensor_from_pandas(
-    #         df[feature_names]
-    #     )
-    #     labels = torch_tensor_from_pandas(
-    #         df[label_name]
-    #     )
-    #     return cls(
-    #         features=features, 
-    #         labels=labels,
-    #     )
-
-
-# @dataclass
-# class Dataset_Set:
-    
-#     train: Dataset
-#     eval: Dataset
-
-#     @classmethod
-#     def from_dataframe_parquet_files(
-#         cls,
-#         train_file_path:Path|str,
-#         eval_file_path:Path|str,
-#         feature_names:list[str],
-#         label_name:str,
-#     ):
-#         train = Dataset.from_dataframe_parquet_file(
-#             train_file_path, 
-#             feature_names=feature_names,
-#             label_name=label_name,
-#         )
-#         eval = Dataset.from_dataframe_parquet_file(
-#             eval_file_path, 
-#             feature_names=feature_names,
-#             label_name=label_name,
-#         )
-#         return cls(
-#             train=train, 
-#             eval=eval,
-#         )
-    
-
-def std_scale(
-    data:Tensor, 
-    reference:Tensor,
-) -> Tensor:
-    """
-    Standard scale a dataset using 
-    the mean and standard deviation
-    of a reference dataset.
-    """
-    var_means = mean(reference, dim=0)
-    var_stds = std(reference, dim=0)
-    return (data - var_means) / var_stds
-
-
-def make_bins(
-    interval:Interval,
-    num_bins:int,
-) -> tuple[Tensor, Tensor]:
-    bin_edges = linspace(
-        *interval,
-        num_bins+1,
-    )
-    bin_mids = (
-        bin_edges[:-1] + 0.5 
-        * (bin_edges[1] - bin_edges[0])
-    )
-    return bin_edges, bin_mids
-
-
-def to_bins(
-    data:Tensor,
-    bin_edges:Tensor,
-    eps:float=1e-2
-) -> Tensor:
-    if any(
-        (data < bin_edges[0]) 
-        | (data > bin_edges[-1])
+    @classmethod
+    def from_pandas_parquet_file(
+        cls, 
+        path:Path|str, 
+        features:list[str], 
+        label:str,
+        trial_index:str="trial",
+        features_dtype:str|None=None,
+        labels_dtype:str|None=None,
     ):
-        raise ValueError(
-            "Data outside of binned interval."
+        df = read_parquet(path)
+        trials = df.index.get_level_values(trial_index)
+        return cls.from_pandas(
+            df[features], 
+            df[label], 
+            trials,
+            features_dtype=features_dtype, 
+            labels_dtype=labels_dtype,
         )
     
-    bin_edges[0] -= abs(Tensor([eps])).item()
-    binned_data = bucketize(
-        input=data, 
-        boundaries=bin_edges, 
-        out_int32=False, 
-        right=False
-    ) - 1
-    return binned_data
+    def std_scale_features(
+        self, 
+        train_means:Tensor, 
+        train_stdevs:Tensor, 
+        save_orig:bool=False,
+    ):
+        if save_orig:
+            self.orig_features = self.features
+        self.features = std_scale(
+            self.features, 
+            train_means, 
+            train_stdevs,
+        )
+
+    def bin_labels(
+        self,
+        interval:Interval,
+        num_bins:int,
+        save_orig:bool=True,
+    ):
+        if save_orig:
+            self.orig_labels = self.labels
+        bin_edges, bin_mids = make_bins(
+            interval, 
+            num_bins,
+        )
+        self.bin_mids = bin_mids
+        self.labels = to_bins(
+            self.labels, 
+            bin_edges,
+        )
+        self.bin_reweights = calc_bin_reweights(
+            self.labels, 
+            num_bins,
+        )
+
+    def group_by_trial(self,):
+        selection = (
+            self.trials.unique().unsqueeze(-1) 
+            == self.trials
+        )
+        self.grouped_features = [
+            self.features[trial_select] 
+            for trial_select in selection
+        ]
+        self.grouped_labels = [
+            self.labels[trial_select] 
+            for trial_select in selection
+        ]
+        self.grouped_trials = [
+            self.trials[trial_select] 
+            for trial_select in selection
+        ]
+
+
+
+@dataclass
+class Dataset_Set_File_Paths:
+    train:str|Path
+    val:str|Path
+    test:str|Path|None = None
+
+    def __post_init__(self):
+        self.train = Path(self.train)
+        self.val = Path(self.val)
+        if self.test is not None:
+            self.test = Path(self.test)
+
+
+@dataclass
+class Dataset_Set:
+    train: Dataset
+    val: Dataset
+    test: Dataset|None = None
+
+    @classmethod
+    def from_pandas_parquet_files(
+        cls,
+        paths:Dataset_Set_File_Paths,
+        features:list[str],
+        label:str,
+        features_dtype:str|None=None,
+        labels_dtype:str|None=None,
+    ):
+        datasets = {
+            split: Dataset.from_pandas_parquet_file(
+                path, 
+                features, 
+                label, 
+                features_dtype=features_dtype, 
+                labels_dtype=labels_dtype
+            )
+            for split, path in asdict(paths)
+        }
+        return cls(**datasets)
+    
+    def apply_std_scale(
+        self,
+    ) -> None:
+        self.std_scale_means = mean(
+            self.train.features, 
+            dim=0
+        )
+        self.std_scale_stds = std(
+            self.train.features, 
+            dim=0
+        )
+        for dset in self:
+            if dset is not None:
+                dset.std_scale_features(
+                    self.std_scale_means, 
+                    self.std_scale_stds
+                )
+
+    def apply_binning(
+        self,
+        interval:Interval,
+        num_bins:int,
+    ) -> None:
+        for dset in self:
+            if dset is not None:
+                dset.bin_labels(
+                    interval, 
+                    num_bins
+                )
+
+    def __iter__(self):
+        return (
+            self.train, 
+            self.val, 
+            self.test
+        ).__iter__()
 
 
 def plot_discrete_dist(

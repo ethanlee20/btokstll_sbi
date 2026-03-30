@@ -185,25 +185,7 @@ class Loss_Table:
         )
     
 
-def calculate_reweights_uniform(
-    binned_labels:Tensor,
-    num_bins:int,
-) -> Tensor:
-    """
-    Calculate class weights for reweighting 
-    classes to uniform distribution.
-    """
-    bin_counts = bincount(
-        input=binned_labels, 
-        minlength=num_bins,
-    )
-    if (bin_counts == 0).any():
-        raise ValueError(
-            f"Some bins are empty!"
-            f" Bin counts:\n{bin_counts}"
-        )
-    inverse_bin_counts = 1 / bin_counts
-    return inverse_bin_counts / sum(inverse_bin_counts)
+
 
 
 
@@ -253,7 +235,9 @@ def _train_epoch(
     optimizer:Optimizer,
 ) -> Tensor:
     
-    cumulative_batch_loss = Tensor([0])
+    device = get_model_current_device(model)
+    
+    cumulative_batch_loss = Tensor([0]).to(device)
     for x, y in data_loader:
         batch_loss = _train_batch(x, y, model, loss_fn, optimizer)
         cumulative_batch_loss += batch_loss
@@ -270,7 +254,9 @@ def _evaluate_epoch(
     scheduler:LRScheduler|None=None
 ) -> Tensor:
     
-    cumulative_batch_loss = Tensor([0])
+    device = get_model_current_device(model)
+    
+    cumulative_batch_loss = Tensor([0]).to(device)
     for x, y in data_loader:
         batch_loss = _evaluate_batch(x, y, model, loss_fn)
         cumulative_batch_loss += batch_loss
@@ -384,7 +370,7 @@ def train(
     if verbose:
         print('\n')
 
-    for ep in hyperparams.epochs:
+    for ep in range(*hyperparams.epochs):
 
         train_loss, eval_loss = _train_evaluate_epoch(
             train_data_loader, 

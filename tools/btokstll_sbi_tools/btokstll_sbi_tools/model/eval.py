@@ -13,7 +13,7 @@ from .util import Dataset, plot_discrete_dist
 from ..util import save_plot_and_close
 
 
-def _calc_log_probs(
+def calc_log_probs(
     logits:Tensor,
     dim:int,
 ) -> Tensor:
@@ -26,7 +26,7 @@ def _calc_log_probs(
 def _calc_set_logits(
     event_logits:Tensor
 ) -> Tensor:
-    event_log_probs = _calc_log_probs(
+    event_log_probs = calc_log_probs(
         event_logits,
         dim=2,
     )
@@ -42,7 +42,7 @@ def _calc_set_log_probs(
     set_logits = _calc_set_logits(
         event_logits,
     )
-    return _calc_log_probs(
+    return calc_log_probs(
         set_logits, 
         dim=1,
     )
