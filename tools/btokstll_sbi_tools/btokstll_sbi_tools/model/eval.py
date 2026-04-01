@@ -23,7 +23,7 @@ def calc_log_probs(
     )
 
 
-def _calc_set_logits(
+def calc_set_logits(
     event_logits:Tensor
 ) -> Tensor:
     event_log_probs = calc_log_probs(
@@ -36,10 +36,10 @@ def _calc_set_logits(
     )
 
 
-def _calc_set_log_probs(
+def calc_set_log_probs(
     event_logits:Tensor,
 ) -> Tensor:
-    set_logits = _calc_set_logits(
+    set_logits = calc_set_logits(
         event_logits,
     )
     return calc_log_probs(
@@ -51,11 +51,11 @@ def _calc_set_log_probs(
 def _shift_to_positive(
     a:Tensor
 ) -> tuple[Tensor, Tensor]:
-    shift = 1 - a.min()
+    shift = (1 - a.min()).to(a.device)
     return a + shift, shift
 
 
-def _calc_expected_value(
+def calc_expected_value(
     log_probs:Tensor, 
     bin_mids:Tensor
 ) -> Tensor:
@@ -69,42 +69,42 @@ def _calc_expected_value(
         logsumexp(
             log_shifted_bin_mids 
             + log_probs, 
-            dim=0
+            dim=1
         )
     ) - shift
 
 
-class Predictor:
-    def __init__(
-        self, 
-        model:Module, 
-        dataset:Dataset, 
-        device:str,
-    ):
-        self.device = device
-        self.model = model.to(device)
-        self.dataset = dataset
-        self.dataset.features = self.dataset.features.to(device)
+# class Predictor:
+#     def __init__(
+#         self, 
+#         model:Module, 
+#         dataset:Dataset, 
+#         device:str,
+#     ):
+#         self.device = device
+#         self.model = model.to(device)
+#         self.dataset = dataset
+#         self.dataset.features = self.dataset.features.to(device)
 
-    def calc_log_probs(
-        self,
-    ) -> Tensor:
-        with no_grad():
-            event_logits = self.model(self.dataset.features)
-            return _calc_set_log_probs(event_logits)
+#     def calc_log_probs(
+#         self,
+#     ) -> Tensor:
+#         with no_grad():
+#             event_logits = self.model(self.dataset.features)
+#             return calc_set_log_probs(event_logits)
         
-    def calc_expected_values(
-        self, 
-        set_log_probs:Tensor, 
-        bin_mids:Tensor,
-    ) -> Tensor:
-        bin_mids = bin_mids.to(self.device)
-        set_log_probs = set_log_probs.to(self.device)
-        with no_grad():
-            expected_values = Tensor(
-                [_calc_expected_value(log_p, bin_mids) for log_p in set_log_probs]
-            )
-        return expected_values
+#     def calc_expected_values(
+#         self, 
+#         set_log_probs:Tensor, 
+#         bin_mids:Tensor,
+#     ) -> Tensor:
+#         bin_mids = bin_mids.to(self.device)
+#         set_log_probs = set_log_probs.to(self.device)
+#         with no_grad():
+#             expected_values = Tensor(
+#                 [calc_expected_value(log_p, bin_mids) for log_p in set_log_probs]
+#             )
+#         return expected_values
 
 
 def plot_discrete_dists(

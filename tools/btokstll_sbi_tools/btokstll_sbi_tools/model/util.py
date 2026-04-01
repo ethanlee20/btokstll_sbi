@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from dataclasses import dataclass, asdict, astuple
+from dataclasses import dataclass, asdict, astuple, field
 
 from numpy import array, repeat, ndarray
 from torch import (
@@ -17,6 +17,7 @@ from torch import (
     bucketize, 
     from_numpy, 
     bincount,
+    equal,
 )
 from torch.nn import Module
 from pandas import read_parquet, DataFrame, Series, Index
@@ -143,17 +144,17 @@ def to_bins(
     return binned_data
 
 
-def calc_bin_reweights(
-    binned_labels:Tensor,
-    num_bins:int,
+def calc_label_reweights(
+    labels:Tensor,
+    num_labels:int,
 ) -> Tensor:
     """
     Calculate class weights for reweighting 
     classes to uniform distribution.
     """
     bin_counts = bincount(
-        input=binned_labels, 
-        minlength=num_bins,
+        input=labels, 
+        minlength=num_labels,
     )
     if (bin_counts == 0).any():
         raise ValueError(
@@ -165,34 +166,61 @@ def calc_bin_reweights(
 
 
 @dataclass
+class Dataset_Metadata:
+    trials: Tensor = Tensor()
+    bin_mids: Tensor = Tensor()
+    bin_edges: Tensor = Tensor()
+    bin_reweights: Tensor = Tensor()
+    std_scale_means: Tensor = Tensor()
+    std_scale_stds: Tensor = Tensor()
+    orig_features: Tensor = Tensor()
+    orig_labels: Tensor = Tensor()
+
+
+@dataclass
 class Dataset:
-    features: Tensor
-    labels: Tensor
-    trials:Tensor
+    metadata: Dataset_Metadata = field(
+        default_factory=Dataset_Metadata
+    )
+    features: Tensor = field(default_factory=Tensor)
+    labels: Tensor = field(default_factory=Tensor)
 
     def __postinit__(
         self,
     ):
-        assert (
+        if (
             len(self.features) 
-            == len(self.labels)
-        )
+            != len(self.labels)
+        ):
+            raise ValueError(
+                "Inconsistent array length."
+            )
 
     def __len__(
         self,
     ) -> int: 
         return len(self.labels)
     
-    def to_device(
-        self, 
-        device:str,
-    ) -> None:
-        self.features = self.features.to(
-            device
-        )
-        self.labels = self.labels.to(
-            device
-        ) 
+    def __iter__(self):
+        return (
+            self.features,
+            self.labels,
+        ).__iter__()
+
+    def __eq__( # fix this
+        self,
+        other,
+    ) -> bool:
+        for self_array, other_array in zip(
+            self, 
+            other
+        ):
+            if not equal(
+                self_array, 
+                other_array,
+            ):
+                return False
+        return True
     
     @classmethod
     def from_pandas(
@@ -216,10 +244,13 @@ class Dataset:
             trials,
             dtype=trials_dtype,
         )
+        metadata = Dataset_Metadata(
+            trials=trials_tensor
+        )
         return cls(
+            metadata=metadata,
             features=features_tensor, 
             labels=labels_tensor,
-            trials=trials_tensor,
         )
     
     @classmethod
@@ -228,7 +259,7 @@ class Dataset:
         path:Path|str, 
         features:list[str], 
         label:str,
-        trial_index:str="trial",
+        trial_index:str="trial_num",
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
     ):
@@ -242,18 +273,31 @@ class Dataset:
             labels_dtype=labels_dtype,
         )
     
+    def to_device(
+        self, 
+        device:str,
+    ) -> None:
+        self.features = self.features.to(
+            device
+        )
+        self.labels = self.labels.to(
+            device
+        ) 
+    
     def std_scale_features(
         self, 
-        train_means:Tensor, 
-        train_stdevs:Tensor, 
+        std_scale_means:Tensor, 
+        std_scale_stds:Tensor, 
         save_orig:bool=False,
     ):
+        self.metadata.std_scale_means = std_scale_means
+        self.metadata.std_scale_stds = std_scale_stds
         if save_orig:
-            self.orig_features = self.features
+            self.metadata.orig_features = self.features
         self.features = std_scale(
             self.features, 
-            train_means, 
-            train_stdevs,
+            std_scale_means, 
+            std_scale_stds,
         )
 
     def bin_labels(
@@ -263,25 +307,33 @@ class Dataset:
         save_orig:bool=True,
     ):
         if save_orig:
-            self.orig_labels = self.labels
-        bin_edges, bin_mids = make_bins(
+            self.metadata.orig_labels = self.labels
+        self.metadata.bin_edges, self.metadata.bin_mids = make_bins(
             interval, 
             num_bins,
         )
-        self.bin_mids = bin_mids
         self.labels = to_bins(
             self.labels, 
-            bin_edges,
+            self.metadata.bin_edges,
         )
-        self.bin_reweights = calc_bin_reweights(
+
+    def calc_label_reweights(
+        self, 
+        num_labels:int,
+    ):
+        self.metadata.bin_reweights = calc_label_reweights(
             self.labels, 
-            num_bins,
+            num_labels,
         )
 
     def group_by_trial(self,):
+        if len(self.metadata.trials) != len(self.labels):
+            raise ValueError(
+                "Mismatch in dataset array lengths."
+            )
         selection = (
-            self.trials.unique().unsqueeze(-1) 
-            == self.trials
+            self.metadata.trials.unique().unsqueeze(-1) 
+            == self.metadata.trials
         )
         self.grouped_features = [
             self.features[trial_select] 
@@ -292,10 +344,9 @@ class Dataset:
             for trial_select in selection
         ]
         self.grouped_trials = [
-            self.trials[trial_select] 
+            self.metadata.trials[trial_select] 
             for trial_select in selection
         ]
-
 
 
 @dataclass
@@ -315,7 +366,14 @@ class Dataset_Set_File_Paths:
 class Dataset_Set:
     train: Dataset
     val: Dataset
-    test: Dataset|None = None
+    test: Dataset
+
+    def __iter__(self):
+        return (
+            self.train, 
+            self.val, 
+            self.test
+        ).__iter__()
 
     @classmethod
     def from_pandas_parquet_files(
@@ -327,34 +385,38 @@ class Dataset_Set:
         labels_dtype:str|None=None,
     ):
         datasets = {
-            split: Dataset.from_pandas_parquet_file(
-                path, 
-                features, 
-                label, 
-                features_dtype=features_dtype, 
-                labels_dtype=labels_dtype
+            split: (
+                Dataset.from_pandas_parquet_file(
+                    path, 
+                    features, 
+                    label, 
+                    features_dtype=features_dtype, 
+                    labels_dtype=labels_dtype
+                ) if path is not None
+                else Dataset()
             )
-            for split, path in asdict(paths)
+            for split, path in asdict(paths).items()
         }
         return cls(**datasets)
     
     def apply_std_scale(
         self,
     ) -> None:
-        self.std_scale_means = mean(
+        std_scale_means = mean(
             self.train.features, 
             dim=0
         )
-        self.std_scale_stds = std(
+        std_scale_stds = std(
             self.train.features, 
             dim=0
         )
         for dset in self:
-            if dset is not None:
-                dset.std_scale_features(
-                    self.std_scale_means, 
-                    self.std_scale_stds
-                )
+            if dset == Dataset():
+                continue
+            dset.std_scale_features(
+                std_scale_means, 
+                std_scale_stds
+            )
 
     def apply_binning(
         self,
@@ -362,18 +424,21 @@ class Dataset_Set:
         num_bins:int,
     ) -> None:
         for dset in self:
-            if dset is not None:
-                dset.bin_labels(
-                    interval, 
-                    num_bins
-                )
+            if dset == Dataset(): 
+                continue
+            dset.bin_labels(
+                interval, 
+                num_bins, 
+            )
 
-    def __iter__(self):
-        return (
-            self.train, 
-            self.val, 
-            self.test
-        ).__iter__()
+    def calc_label_reweights(
+        self, 
+        num_labels:int,
+    ):
+        self.train.calc_label_reweights(
+            num_labels
+        )
+
 
 
 def plot_discrete_dist(
@@ -382,10 +447,8 @@ def plot_discrete_dist(
     values, 
     **plot_kwargs,
 ) -> None:
-
     bin_edges = array(bin_edges)
     values = array(values)
-
     x = repeat(bin_edges, 2)[1:-1]
     y = repeat(values, 2)
     ax.plot(x, y, **plot_kwargs)
