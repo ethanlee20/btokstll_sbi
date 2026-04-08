@@ -8,13 +8,13 @@ from matplotlib.colors import CenteredNorm, Colormap, Normalize
 from matplotlib.cm import ScalarMappable
 import pandas
 
-from btokstll_sbi_tools.util import (
-    setup_dark_plotting, 
+from btokstll_sbi_tools.util.misc import (
+    turn_on_dark_plots, 
     save_plot_and_close,
 )
 
 
-setup_dark_plotting()
+turn_on_dark_plots()
 
 sim_type = "gen"
 n_bins = 10

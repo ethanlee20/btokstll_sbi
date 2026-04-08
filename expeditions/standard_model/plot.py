@@ -2,13 +2,13 @@
 from matplotlib.pyplot import subplots
 from pandas import read_parquet
 
-from btokstll_sbi_tools.util import (
-    setup_dark_plotting, 
+from btokstll_sbi_tools.util.misc import (
+    turn_on_dark_plots, 
     save_plot_and_close
 )
 
 
-setup_dark_plotting(
+turn_on_dark_plots(
 )
 data = read_parquet(
     "data/combined.parquet"

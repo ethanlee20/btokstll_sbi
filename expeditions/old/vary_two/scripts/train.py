@@ -21,7 +21,7 @@ from btokstll_sbi_tools.train import (
     Loss_Table
 )
 from btokstll_sbi_tools.eval import Predictor, plot_discrete_dist
-from btokstll_sbi_tools.util import (
+from btokstll_sbi_tools.util.misc import (
     to_torch_tensor,
     bin_,
     Dataset, 

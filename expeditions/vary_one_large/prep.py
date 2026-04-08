@@ -1,7 +1,7 @@
 
 from pathlib import Path
 
-from btokstll_sbi_tools.data_prep import prep_data
+from btokstll_sbi_tools.prep import prep_data
 
 
 in_data_dirs = Path("./data/raw/").glob("*/")

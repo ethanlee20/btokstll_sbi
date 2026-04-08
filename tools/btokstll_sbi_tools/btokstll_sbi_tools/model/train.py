@@ -1,6 +1,6 @@
 
 from types import NoneType
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from math import floor
 
 from torch import (
@@ -10,13 +10,14 @@ from torch import (
     randperm, 
     reshape, 
     bincount, 
-    sum
+    sum,
+    equal,
 )
 from torch.nn import Module, CrossEntropyLoss
 from torch.optim import Optimizer, Adam, AdamW
-from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
+from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau, CosineAnnealingLR
 
-from ..util import are_instance, dump_json, load_json, Interval
+from ..util.misc import are_instance, dump_json, load_json, Interval
 from .util import Dataset, get_model_current_device
 
 
@@ -86,7 +87,10 @@ class Data_Loader:
         
         batch_indices = self.batched_indices[self.index]
         batch_features = self.dataset.features[batch_indices]
-        batch_labels = self.dataset.labels[batch_indices]
+        batch_labels = (
+            Tensor() if equal(self.dataset.labels, Tensor()) 
+            else self.dataset.labels[batch_indices]
+        )
 
         self.index += 1
 
@@ -120,16 +124,23 @@ class ReduceLROnPlateau_Hyperparams:
 
 
 @dataclass
+class CosineAnnealingLR_Hyperparams:
+    T_max: int = 0
+    eta_min: float = 0.0
+    last_epoch: int = -1
+
+
+@dataclass
 class Hyperparams:
-    optimizer: Adam_Hyperparams | AdamW_Hyperparams
-    train_batch_size: int
-    eval_batch_size: int
-    shuffle: bool
-    epochs: Interval
-    loss_fn: CrossEntropyLoss_Hyperparams
-    lr_scheduler: ReduceLROnPlateau_Hyperparams|None
-    num_bins: int
-    binned_interval: Interval
+    optimizer: Adam_Hyperparams | AdamW_Hyperparams = field(default_factory=AdamW_Hyperparams)
+    train_batch_size: int = 32
+    eval_batch_size: int = 32
+    shuffle: bool = True
+    epochs: Interval = field(default_factory=Interval)
+    loss_fn: CrossEntropyLoss_Hyperparams = field(default_factory=CrossEntropyLoss_Hyperparams)
+    lr_scheduler: ReduceLROnPlateau_Hyperparams|CosineAnnealingLR_Hyperparams|None = None
+    num_bins: int = 8
+    binned_interval: Interval = field(default_factory=Interval)
 
 
 
@@ -309,6 +320,7 @@ _available_loss_fns = {
 
 _available_lr_schedulers = {
     ReduceLROnPlateau_Hyperparams: ReduceLROnPlateau, 
+    CosineAnnealingLR_Hyperparams: CosineAnnealingLR,
     NoneType: None,
 }
 

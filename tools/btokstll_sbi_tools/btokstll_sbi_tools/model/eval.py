@@ -10,7 +10,7 @@ from torch.nn import Module
 from torch.nn.functional import log_softmax
 
 from .util import Dataset, plot_discrete_dist
-from ..util import save_plot_and_close
+from ..util.misc import save_plot_and_close
 
 
 def calc_log_probs(

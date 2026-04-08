@@ -5,6 +5,7 @@ from .train import (
     AdamW_Hyperparams,
     CrossEntropyLoss_Hyperparams,
     ReduceLROnPlateau_Hyperparams,
+    CosineAnnealingLR_Hyperparams,
     Hyperparams,
     Loss_Table,
     train,

@@ -3,7 +3,7 @@ from pathlib import Path
 from matplotlib.pyplot import subplots, savefig, close, style, rcParams
 
 
-from btokstll_sbi_tools.util import load_json
+from btokstll_sbi_tools.util.misc import load_json
 from btokstll_sbi_tools.train import Loss_Table
 
 

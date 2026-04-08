@@ -22,7 +22,7 @@ from torch import (
 from torch.nn import Module
 from pandas import read_parquet, DataFrame, Series, Index
 
-from ..util import Interval
+from ..util.misc import Interval
 
 
 def select_device(
@@ -185,28 +185,17 @@ class Dataset:
     features: Tensor = field(default_factory=Tensor)
     labels: Tensor = field(default_factory=Tensor)
 
-    def __postinit__(
-        self,
-    ):
-        if (
-            len(self.features) 
-            != len(self.labels)
-        ):
-            raise ValueError(
-                "Inconsistent array length."
-            )
-
     def __len__(
         self,
     ) -> int: 
-        return len(self.labels)
+        return len(self.features)
     
-    def __iter__(self):
+    def __iter__(self): # fix this
         return (
             self.features,
             self.labels,
         ).__iter__()
-
+    
     def __eq__( # fix this
         self,
         other,
@@ -221,13 +210,13 @@ class Dataset:
             ):
                 return False
         return True
-    
+
     @classmethod
     def from_pandas(
         cls,
         features:DataFrame|Series,
-        labels:DataFrame|Series,
-        trials:Series|Index,
+        labels:DataFrame|Series=DataFrame(dtype="int64"),
+        trials:Series|Index=Series(dtype="int64"),
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
         trials_dtype:str|None="int64",
@@ -258,17 +247,18 @@ class Dataset:
         cls, 
         path:Path|str, 
         features:list[str], 
-        label:str,
+        label:str|None=None,
         trial_index:str="trial_num",
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
     ):
         df = read_parquet(path)
         trials = df.index.get_level_values(trial_index)
+        labels = Series(dtype="int64") if label is None else df[label]
         return cls.from_pandas(
             df[features], 
-            df[label], 
-            trials,
+            labels=labels,
+            trials=trials,
             features_dtype=features_dtype, 
             labels_dtype=labels_dtype,
         )
@@ -380,7 +370,7 @@ class Dataset_Set:
         cls,
         paths:Dataset_Set_File_Paths,
         features:list[str],
-        label:str,
+        label:str|None=None,
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
     ):

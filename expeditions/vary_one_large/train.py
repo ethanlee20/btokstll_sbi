@@ -27,14 +27,14 @@ from btokstll_sbi_tools.model import (
     save_torch_model_state_dict,
     load_torch_model_state_dict,
 )
-from btokstll_sbi_tools.util import (
+from btokstll_sbi_tools.util.misc import (
     Interval,
     save_plot_and_close, 
-    setup_dark_plotting,
+    turn_on_dark_plots,
 )
 
 
-setup_dark_plotting()
+turn_on_dark_plots()
 
 run_name = lambda wc: f"pred_c{wc}_vary_c{wc}_big_model"
 models_dir = Path("models")
