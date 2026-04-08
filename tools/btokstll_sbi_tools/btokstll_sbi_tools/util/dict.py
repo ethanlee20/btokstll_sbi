@@ -1,59 +1,43 @@
 
-from dataclasses import dataclass
 from typing import Any
 
 
 def merge_dicts(
     *dicts:dict,
-):
+) -> dict:
     merged = {}
     for d in dicts:
         merged = merged | d
     return merged
 
 
-@dataclass
-class Node:
-    key:Any
-    value:Any
-
-    def as_dict(self):
-        return {
-            self.key: self.value,
-        }
-
-
 def access_nested_dict(
     dict_:dict, 
     *keys:Any,
-    key_sep:str|None=None
-) -> Node:
-    value = dict_.copy()
+) -> Any:
+    value = dict_
     for k in keys: 
         value = value[k]
-    key = (
-        keys if key_sep is None
-        else key_sep.join(keys)
-    )
-    return Node(key, value)
+    return value
 
 
 def flatten_dict(
     dict_:dict, 
-    *keys:Any,
+    *keys:str,
+    sep:str="_",
 ) -> dict:
-    node = access_nested_dict(
+    value = access_nested_dict(
         dict_, 
         *keys,
-        key_sep="_",
     )
     if not isinstance(
-        node.value, 
+        value, 
         dict,
     ):
-        return node.as_dict()
+        key = sep.join(keys)
+        return {key: value}
     subdicts = [
-        flatten_dict(dict_, *keys, k) 
-        for k in node.value.keys()
+        flatten_dict(dict_, *keys, subkey) 
+        for subkey in value.keys()
     ]
     return merge_dicts(*subdicts)
