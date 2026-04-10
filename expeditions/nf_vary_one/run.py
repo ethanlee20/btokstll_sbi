@@ -10,11 +10,56 @@ from btokstll_sbi_tools.model import (
     Dataset_Set,
     Data_Loader,
 )
-from btokstll_sbi_tools.util.misc import save_plot_and_close
+from btokstll_sbi_tools.util.plot import (
+    set_ax_bounds, 
+    set_ax_labels,
+    set_ax_ticks,
+    turn_on_dark_plots,
+    turn_on_hq_plots,
+    save_fig_and_close,
+)
+from btokstll_sbi_tools.model.util import (
+    select_device, 
+    save_torch_model_state_dict, 
+    load_torch_model_state_dict,
+)
+
+
+# device setup
+
+device = select_device()
+
+
+# plot setup
+
+turn_on_dark_plots()
+turn_on_hq_plots()
+plot_interval = (-2.25, 2.25)
+ticks = [-2, -1, 0, 1, 2]
+xlabel = r"$\cos\theta_\mu$ (normalized)"
+ylabel = r"$\delta C_9$ (normalized)"
+label_fontsize = 18
+
+
+# grid setup
+
+grid_size = 200
+xx, yy = torch.meshgrid(
+    torch.linspace(*plot_interval, grid_size), 
+    torch.linspace(*plot_interval, grid_size), 
+    indexing="ij"
+)
+zz = torch.cat(
+    [
+        xx.unsqueeze(2), 
+        yy.unsqueeze(2)
+    ], 
+    dim=2,
+).view(-1, 2)
+zz = zz.to(device)
 
 
 # load data
-
 
 data_paths = Dataset_Set_File_Paths(
     "data/vary_c9_train.parquet", 
@@ -28,68 +73,44 @@ dset_set = Dataset_Set.from_pandas_parquet_files(
 dset_set.apply_std_scale()
 
 
+# setup model
 
-
-# Set up model
-
-# Define 2D Gaussian base distribution
 base = nf.distributions.base.DiagGaussian(2)
 
-# Define list of flows
 num_layers = 32
 flows = []
 for i in range(num_layers):
-    # Neural network with two hidden layers having 64 units each
-    # Last layer is initialized by zeros making training more stable
     param_map = nf.nets.MLP([1, 64, 64, 2], init_zeros=True)
-    # Add flow layer
     flows.append(nf.flows.AffineCouplingBlock(param_map))
-    # Swap dimensions
-    flows.append(nf.flows.Permute(2, mode='swap'))
-    
-# Construct flow model
+    flows.append(nf.flows.Permute(2, mode='swap')) 
+   
 model = nf.NormalizingFlow(base, flows)
-
-
-
-
-# Move model on GPU if available
-enable_cuda = True
-device = torch.device('cuda' if torch.cuda.is_available() and enable_cuda else 'cpu')
 model = model.to(device)
-
-
-
 
 
 # Plot target distribution
 
 fig, ax = plt.subplots()
-indices = torch.randint(
-    low=0, 
-    high=len(dset_set.train.features), 
-    size=(100_000,)
+ax.hist2d(
+    dset_set.train.features[:,0], 
+    dset_set.train.features[:,1], 
+    density=True,
+    bins=100,
+    range=(plot_interval, plot_interval)
 )
-ax.scatter(
-    dset_set.train.features[indices][:,0],
-    dset_set.train.features[indices][:,1],
-    alpha=0.005
+ax.set_aspect("equal")
+set_ax_ticks(ax, ticks)
+set_ax_bounds(ax, plot_interval)
+set_ax_labels(
+    ax, 
+    xlabel, 
+    ylabel, 
+    fontsize=label_fontsize
 )
-save_plot_and_close("plots/target.png")
-
-
+save_fig_and_close("plots/target.png")
 
 
 # Plot initial flow distribution
-
-grid_size = 200
-xx, yy = torch.meshgrid(
-    torch.linspace(-3, 3, grid_size), 
-    torch.linspace(-3, 3, grid_size), 
-    indexing="ij"
-)
-zz = torch.cat([xx.unsqueeze(2), yy.unsqueeze(2)], 2).view(-1, 2)
-zz = zz.to(device)
 
 model.eval()
 log_prob = model.log_prob(zz).to('cpu').view(*xx.shape)
@@ -97,63 +118,149 @@ model.train()
 prob = torch.exp(log_prob)
 prob[torch.isnan(prob)] = 0
 
-plt.figure(figsize=(15, 15), dpi=50)
-plt.pcolormesh(xx, yy, prob.data.numpy(), cmap='coolwarm')
-plt.gca().set_aspect('equal', 'box')
-save_plot_and_close("plots/initial.png")
-
-
-
-
+fig, ax = plt.subplots()
+ax.pcolormesh(xx, yy, prob.data.numpy())
+ax.set_aspect("equal")
+set_ax_labels(ax, xlabel, ylabel, fontsize=label_fontsize)
+save_fig_and_close("plots/initial.png")
 
 
 # Train model
-epochs = 2
-dloader = Data_Loader(
-    dset_set.train, 
-    batch_size=1_000, 
-    shuffle=True
+
+retrain = False
+if retrain:
+
+    epochs = 2
+    dloader = Data_Loader(
+        dset_set.train, 
+        batch_size=1_000, 
+        shuffle=True
+    )
+    loss_hist = np.array([])
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4, weight_decay=1e-5)
+
+    it = 0
+    pic_at = (0, 50, 100, 999)
+    for ep in range(epochs):
+
+        for features, _ in tqdm(dloader):
+            optimizer.zero_grad()
+            
+            features = features.to(device)    
+            # Compute loss
+            loss = model.forward_kld(features)
+            
+            # Do backprop and optimizer step
+            if ~(torch.isnan(loss) | torch.isinf(loss)):
+                loss.backward()
+                optimizer.step()
+            
+            # Log loss
+            loss_hist = np.append(loss_hist, loss.to('cpu').data.numpy())
+            
+            if it in pic_at:
+                # Plot learned distribution
+                model.eval()
+                log_prob = model.log_prob(zz)
+                model.train()
+                prob = torch.exp(log_prob.to('cpu').view(*xx.shape))
+                prob[torch.isnan(prob)] = 0
+
+                fig, ax = plt.subplots()
+                ax.pcolormesh(xx, yy, prob.data.numpy())
+                ax.set_aspect('equal')
+                set_ax_labels(ax, xlabel, ylabel, fontsize=label_fontsize)
+                save_fig_and_close(f"plots/model_at_{it}.png")
+            
+            it += 1
+
+    save_torch_model_state_dict(model, "models/model.pt")
+
+    fig, ax = plt.subplots()
+    ax.plot(loss_hist, label='loss')
+    ax.legend()
+    save_fig_and_close("plots/loss.png")
+
+else:
+    model.load_state_dict(
+        load_torch_model_state_dict("models/model.pt")
+    )
+
+
+# Plot unnormalized p(y | x) for 3 training data points
+
+num_samples = 3
+idx = torch.randint(
+    low=0, 
+    high=len(dset_set.train.features), 
+    size=(num_samples,)
 )
+data = dset_set.train.features[idx]
+labels = data[:, 1]
+features = data[:, 0]
 
+input_to_model = torch.cartesian_prod(
+    features, 
+    yy[0,:],
+)#.view(
+#     num_samples, 
+#     grid_size, 
+#     -1
+# )
+input_to_model = input_to_model.to(device)
 
-loss_hist = np.array([])
-
-optimizer = torch.optim.Adam(model.parameters(), lr=5e-4, weight_decay=1e-5)
-
-for ep in range(epochs):
-
-    for features, _ in tqdm(dloader):
-        optimizer.zero_grad()
-        
-        features = features.to(device)    
-        # Compute loss
-        loss = model.forward_kld(features)
-        
-        # Do backprop and optimizer step
-        if ~(torch.isnan(loss) | torch.isinf(loss)):
-            loss.backward()
-            optimizer.step()
-        
-        # Log loss
-        loss_hist = np.append(loss_hist, loss.to('cpu').data.numpy())
-        
-    # Plot learned distribution
-    model.eval()
-    log_prob = model.log_prob(zz)
-    model.train()
-    prob = torch.exp(log_prob.to('cpu').view(*xx.shape))
+model.eval()
+with torch.no_grad():
+    log_prob = model.log_prob(input_to_model)
+    prob = torch.exp(log_prob.to('cpu'))
     prob[torch.isnan(prob)] = 0
+    prob = prob.view(num_samples, grid_size, -1)
 
-    plt.figure(figsize=(15, 15), dpi=50)
-    plt.pcolormesh(xx, yy, prob.data.numpy(), cmap='coolwarm')
-    plt.gca().set_aspect('equal', 'box')
-    save_plot_and_close(f"plots/model_epoch_{ep}.png")
+fig, ax = plt.subplots()
+colors = ['#377eb8', '#ff7f00', '#4daf4a'][:num_samples]
+alpha=0.8
+for dist, label, feat, color in zip(prob, labels, features, colors):
+    ax.plot(
+        yy[0, :].numpy(), 
+        dist, 
+        color=color, 
+        alpha=alpha, 
+        label=(
+            r"$\cos\theta_\mu=" 
+            f"{feat.item():.2f}"
+            r"$"
+        ),
+    )
+    ax.axvline(
+        label.item(), 
+        color=color, 
+        linestyle="--", 
+        alpha=alpha, 
+        label=(
+            r"$\delta C_9="
+            f"{label.item():.2f}"
+            r"$"
+        ),
+    )
+set_ax_labels(
+    ax, 
+    ylabel, 
+    r"$\propto p(\delta C_9 \,|\, \cos\theta_\mu)$", 
+    fontsize=label_fontsize
+)
+ax.legend()
+save_fig_and_close(f"plots/model_dists.png")
 
-# Plot loss
-plt.figure(figsize=(10, 10), dpi=50)
-plt.plot(loss_hist, label='loss')
-plt.legend()
-save_plot_and_close("plots/loss.png")
+
+
+
+
+
+
+
+
+
+
 
 
 

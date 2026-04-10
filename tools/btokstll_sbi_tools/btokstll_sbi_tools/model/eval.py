@@ -9,8 +9,8 @@ from torch import no_grad, sum, log, exp, logsumexp, Tensor
 from torch.nn import Module
 from torch.nn.functional import log_softmax
 
-from .util import Dataset, plot_discrete_dist
-from ..util.misc import save_plot_and_close
+from .util import Dataset
+from ..util.plot import save_fig_and_close, plot_discrete_dist
 
 
 def calc_log_probs(
@@ -278,4 +278,4 @@ def plot_predictions(
         alpha=alpha, 
         axis_label_fontsize=axis_label_fontsize,
     ) 
-    save_plot_and_close(out_path)
+    save_fig_and_close(out_path)

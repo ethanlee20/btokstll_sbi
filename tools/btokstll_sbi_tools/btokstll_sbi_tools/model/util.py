@@ -82,8 +82,9 @@ def torch_tensor_from_pandas(
 
 def save_torch_model_state_dict(
     model:Module, 
-    path:Path,
+    path:Path|str,
 ):
+    path = Path(path)
     if not path.parent.is_dir():
         raise ValueError(f"Parent directory doesn't exist: {path.parent}")
     if path.exists():
@@ -428,17 +429,3 @@ class Dataset_Set:
         self.train.calc_label_reweights(
             num_labels
         )
-
-
-
-def plot_discrete_dist(
-    ax, 
-    bin_edges, 
-    values, 
-    **plot_kwargs,
-) -> None:
-    bin_edges = array(bin_edges)
-    values = array(values)
-    x = repeat(bin_edges, 2)[1:-1]
-    y = repeat(values, 2)
-    ax.plot(x, y, **plot_kwargs)
