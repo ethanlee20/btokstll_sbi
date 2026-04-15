@@ -130,17 +130,17 @@ save_fig_and_close("plots/initial.png")
 retrain = False
 if retrain:
 
-    epochs = 2
+    epochs = 3
     dloader = Data_Loader(
         dset_set.train, 
         batch_size=1_000, 
         shuffle=True
     )
     loss_hist = np.array([])
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4, weight_decay=1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
     it = 0
-    pic_at = (0, 50, 100, 999)
+    pic_at = (0, 50, 100, 999, 1999, 2999)
     for ep in range(epochs):
 
         for features, _ in tqdm(dloader):
@@ -248,8 +248,27 @@ set_ax_labels(
     r"$\propto p(\delta C_9 \,|\, \cos\theta_\mu)$", 
     fontsize=label_fontsize
 )
-ax.legend()
+ax.legend(loc="upper right")
+ax.set_box_aspect(1)
 save_fig_and_close(f"plots/model_dists.png")
+
+with torch.no_grad():
+    model.eval()
+    log_prob = model.log_prob(zz)
+    model.train()
+    prob = torch.exp(log_prob.to('cpu').view(*xx.shape))
+    prob[torch.isnan(prob)] = 0
+
+    fig, ax = plt.subplots()
+    ax.pcolormesh(xx, yy, prob.data.numpy())
+    for label, feat, color in zip(labels, features, colors):
+        ax.axvline(feat.item(), color=color,)
+        ax.scatter(feat.item(), label.item(), color=color,)
+
+    ax.set_aspect('equal')
+
+    set_ax_labels(ax, xlabel, ylabel, fontsize=label_fontsize)
+    save_fig_and_close(f"plots/final_model_annotated.png")
 
 
 
