@@ -57,7 +57,7 @@ zz = torch.cat(
     dim=2,
 ).view(-1, 2)
 zz = zz.to(device)
-
+breakpoint()
 
 # load data
 
@@ -276,40 +276,3 @@ with torch.no_grad():
 
 
 
-
-
-
-
-
-
-
-
-# # Plot target distribution
-# f, ax = plt.subplots(1, 2, sharey=True, figsize=(15, 7))
-
-# log_prob = target.log_prob(zz).to('cpu').view(*xx.shape)
-# prob = torch.exp(log_prob)
-# prob[torch.isnan(prob)] = 0
-
-# ax[0].pcolormesh(xx, yy, prob.data.numpy(), cmap='coolwarm')
-
-# ax[0].set_aspect('equal', 'box')
-# ax[0].set_axis_off()
-# ax[0].set_title('Target', fontsize=24)
-
-# # Plot learned distribution
-# model.eval()
-# log_prob = model.log_prob(zz).to('cpu').view(*xx.shape)
-# model.train()
-# prob = torch.exp(log_prob)
-# prob[torch.isnan(prob)] = 0
-
-# ax[1].pcolormesh(xx, yy, prob.data.numpy(), cmap='coolwarm')
-
-# ax[1].set_aspect('equal', 'box')
-# ax[1].set_axis_off()
-# ax[1].set_title('Real NVP', fontsize=24)
-
-# plt.subplots_adjust(wspace=0.1)
-
-# plt.show()

@@ -1,6 +1,6 @@
 awkward==2.9.0
 awkward_cpp==52
--e btokstll_sbi_tools
+-e tools/btokstll_sbi_tools
 colorama==0.4.6
 cramjam==2.11.0
 fsspec==2026.2.0

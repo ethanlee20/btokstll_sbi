@@ -5,3 +5,6 @@ build-backend = "hatchling.build"
 [project]
 name = "btokstll_sbi_tools"
 version = "0.1"
+
+[tool.hatch.build.targets.wheel]
+packages = ["btokstll_sbi_tools"]
