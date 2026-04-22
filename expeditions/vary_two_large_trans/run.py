@@ -248,8 +248,8 @@ else:
 
 # eval
 
-vary_one_dset_set.val.to_device(device)
-vary_two_dset_set.val.to_device(device)
+vary_one_dset_set.val.to(device)
+vary_two_dset_set.val.to(device)
 
 vary_one_dset_set.val.group_by_trial()
 vary_two_dset_set.val.group_by_trial()

@@ -87,9 +87,12 @@ class Data_Loader:
             raise StopIteration
         
         batch_indices = self.batched_indices[self.index]
-        batch_features = self.dataset.features[batch_indices]
+        batch_features = (
+            None if self.dataset.features is None 
+            else self.dataset.features[batch_indices]
+        )
         batch_labels = (
-            Tensor() if equal(self.dataset.labels, Tensor()) 
+            None if self.dataset.labels is None 
             else self.dataset.labels[batch_indices]
         )
 
@@ -337,8 +340,8 @@ def train(
 ) -> Loss_Table:
     
     model = model.to(device)
-    train_dataset.to_device(device)
-    eval_dataset.to_device(device)
+    train_dataset.to(device)
+    eval_dataset.to(device)
     
     optimizer_class = _available_optimizers[
         type(hyperparams.optimizer)

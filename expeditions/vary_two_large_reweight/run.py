@@ -177,7 +177,7 @@ else:
 
 model = model.to(device)
 
-dset_set.val.to_device(device)
+dset_set.val.to(device)
 dset_set.val.group_by_trial()
 logits = cat(
     [
@@ -420,7 +420,7 @@ if retrain:
         ax.legend(fontsize=13, markerscale=5)
         save_plot_and_close(f"plots/loss_{model_name(bin_)}.png")
 
-vary_two_dset_set.val.to_device(device)
+vary_two_dset_set.val.to(device)
 vary_two_dset_set.val.group_by_trial()
 
 models = [Binary_MLP().to(device) for _ in range(num_bins)]

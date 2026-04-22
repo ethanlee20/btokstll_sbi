@@ -1,7 +1,7 @@
 
 from matplotlib.pyplot import subplots
 
-from torch import linspace, cartesian_prod, no_grad
+from torch import linspace, cartesian_prod, no_grad, sum
 
 from normflows import NormalizingFlow
 from normflows.flows import AffineCouplingBlock, Permute
@@ -45,11 +45,12 @@ data_paths = Dataset_Set_File_Paths(
 dset_set = Dataset_Set.from_pandas_parquet_files(
     data_paths, 
     features=["cos_theta_mu",],
-    label="wc_set_d_c_9", 
+    labels=["wc_set_d_c_9",], 
+    trials="trial_num",
     features_dtype="float32",
     labels_dtype="float32",
 )
-dset_set.apply_std_scale()
+dset_set.apply_std_scale(scale_features=True, scale_labels=True)
 dset_set.val.group_by_trial()
 
 
@@ -81,69 +82,57 @@ sample_at = linspace(*plot_interval, num_samples)
 
 
 # Input to model
-
-features = dset_set.val.grouped_features[0].squeeze()
-label = dset_set.val.grouped_labels[0].unique().item()
-
-input_to_model = cartesian_prod(
-    features, 
-    sample_at,
-)
-input_to_model = input_to_model.to(device)
-
-model.eval()
-with no_grad():
-    event_log_probs = model.log_prob(input_to_model)
-    event_log_probs = event_log_probs.view( 
-        -1, 
-        num_samples,
-    )
-
-
-# Plot first 3 event distributions
-
 fig, ax = subplots()
-colors = ['#377eb8', '#ff7f00', '#4daf4a']
-alpha=0.8
+alpha = 0.8
+for i in range(5):
+    features = dset_set.val.features[i].squeeze()
+    label = dset_set.val.labels[i].unique().item()
 
-for log_p, feat, color in zip(
-    event_log_probs[:3], 
-    features, 
-    colors,
-):
+    input_to_model = cartesian_prod(
+        features, 
+        sample_at,
+    )
+    input_to_model = input_to_model.to(device)
+
+    model.eval()
+    with no_grad():
+        event_log_probs = model.log_prob(input_to_model)
+        event_log_probs = event_log_probs.view( 
+            -1, 
+            num_samples,
+        )
+        set_log_probs = sum(event_log_probs, dim=0)
+
+
+    # plot set log probs
+
     ax.plot(
-        sample_at, 
-        log_p.cpu(), 
-        color=color, 
-        alpha=alpha, 
-        label=(
-            r"$\cos\theta_\mu=" 
-            f"{feat.item():.2f}"
-            r"$"
-        ),
+        sample_at,
+        set_log_probs.cpu(),
+        alpha=alpha,
+        label=f"Set Log Probs: {label}"
     )
-    ax.axvline(
-        label, 
-        color=color, 
-        linestyle="--", 
-        alpha=alpha, 
-        label=(
-            r"$\delta C_9="
-            f"{label:.2f}"
-            r"$"
-        ),
-    )
+    # ax.axvline(
+    #     label, 
+    #     alpha=alpha, 
+    #     linestyle="--", 
+    #     label=(
+    #         r"$\delta C_9="
+    #         f"{label:.2f}"
+    #         r"$"
+    #     ),
+    # )
 
 set_ax_labels(
     ax, 
     ylabel, 
-    r"$\propto p(\delta C_9 \,|\, \cos\theta_\mu)$", 
+    r"$\log p(\delta C_9 \,|\, \textrm{Dataset}) + \textrm{Const.}$", 
     fontsize=label_fontsize
 )
 set_ax_bounds(
     ax, 
     xbounds=plot_interval, 
-    ybounds=(-5, 0.2),
+    ybounds=(-1e5, -4e4),
 )
 set_ax_ticks(
     ax, 
@@ -151,4 +140,59 @@ set_ax_ticks(
 )
 ax.legend(loc="upper right")
 ax.set_box_aspect(1)
-save_fig_and_close(f"plots/eval_model_dists.png")
+save_fig_and_close(f"plots/eval_model_set_dist_many.png")
+
+
+
+# # Plot first 3 event distributions
+
+# fig, ax = subplots()
+# colors = ['#377eb8', '#ff7f00', '#4daf4a']
+# alpha=0.8
+
+# for log_p, feat, color in zip(
+#     event_log_probs[:3], 
+#     features, 
+#     colors,
+# ):
+#     ax.plot(
+#         sample_at, 
+#         log_p.cpu(), 
+#         color=color, 
+#         alpha=alpha, 
+#         label=(
+#             r"$\cos\theta_\mu=" 
+#             f"{feat.item():.2f}"
+#             r"$"
+#         ),
+#     )
+#     ax.axvline(
+#         label, 
+#         color=color, 
+#         linestyle="--", 
+#         alpha=alpha, 
+#         label=(
+#             r"$\delta C_9="
+#             f"{label:.2f}"
+#             r"$"
+#         ),
+#     )
+
+# set_ax_labels(
+#     ax, 
+#     ylabel, 
+#     r"$\log p(\delta C_9 \,|\, \textrm{Event}) + \textrm{Const.}$", 
+#     fontsize=label_fontsize
+# )
+# set_ax_bounds(
+#     ax, 
+#     xbounds=plot_interval, 
+#     ybounds=(-5, 0.2),
+# )
+# set_ax_ticks(
+#     ax, 
+#     xticks=ticks,
+# )
+# ax.legend(loc="upper right")
+# ax.set_box_aspect(1)
+# save_fig_and_close(f"plots/eval_model_dists.png")

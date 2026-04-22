@@ -62,8 +62,8 @@ breakpoint()
 # load data
 
 data_paths = Dataset_Set_File_Paths(
-    "data/vary_c9_train.parquet", 
-    "data/vary_c9_val.parquet",
+    train="data/vary_c9_train.parquet", 
+    val="data/vary_c9_val.parquet",
 )
 dset_set = Dataset_Set.from_pandas_parquet_files(
     data_paths, 
@@ -109,7 +109,26 @@ set_ax_labels(
 )
 save_fig_and_close("plots/target.png")
 
+fig, ax = plt.subplots()
+ax.hist(
+    dset_set.train.features[:,1], 
+    density=True, 
+    bins=30, 
+    range=plot_interval,
+    log=True,
+)
+# ax.set_yscale("log")
+# ax.set_box_aspect(1)
+# set_ax_ticks(ax, xticks=ticks)
+# set_ax_bounds(ax, xbounds=plot_interval)
+set_ax_labels(
+    ax, 
+    xlabel=ylabel, 
+    fontsize=label_fontsize
+)
+save_fig_and_close("plots/target_labels.png")
 
+breakpoint()
 # Plot initial flow distribution
 
 model.eval()
@@ -127,7 +146,7 @@ save_fig_and_close("plots/initial.png")
 
 # Train model
 
-retrain = False
+retrain = True
 if retrain:
 
     epochs = 3

@@ -1,4 +1,5 @@
 
+from typing import Any
 from pathlib import Path
 from dataclasses import dataclass, asdict, astuple, field
 
@@ -167,129 +168,156 @@ def calc_label_reweights(
 
 
 @dataclass
-class Dataset_Metadata:
-    trials: Tensor = Tensor()
-    bin_mids: Tensor = Tensor()
-    bin_edges: Tensor = Tensor()
-    bin_reweights: Tensor = Tensor()
-    std_scale_means: Tensor = Tensor()
-    std_scale_stds: Tensor = Tensor()
-    orig_features: Tensor = Tensor()
-    orig_labels: Tensor = Tensor()
+class Data:
+    data: Tensor = Tensor()
+
+    def to(self, arg):
+        self.data = self.data.to(arg)
+ 
+    def std_scale(
+        self, 
+        by:Data,
+        dim:int,
+        keep:bool=False
+    ):
+        if keep:
+            self.no_scale = self.data
+        means = by.data.mean(dim=dim)
+        stds = by.data.std(dim=dim) 
+        self.data = std_scale(self.data, means, stds)
+        self.scale_means = means
+        self.scale_stds = stds
+
+    def group(
+        self, 
+        by:Data, 
+        keep:bool=False,
+    ):
+        if keep:
+            self.ungrouped = self.data
+        selection = (
+            by.data.unique().unsqueeze(-1) 
+            == by.data
+        )
+        self.data = [
+            self.data[i] for i in selection
+        ]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __iter__(self):
+        return self.data.__iter__()
+    
+    def __getitem__(self, index:int):
+        return self.data[index]
 
 
 @dataclass
 class Dataset:
-    metadata: Dataset_Metadata = field(
-        default_factory=Dataset_Metadata
-    )
-    features: Tensor = field(default_factory=Tensor)
-    labels: Tensor = field(default_factory=Tensor)
+    features: Data|None = None
+    labels: Data|None = None
+    trials: Data|None = None
+
+    def std_scale(
+        self, 
+        by:Dataset, 
+        scale_features:bool, 
+        scale_labels:bool, 
+        dim:int,
+    ):
+        if scale_features:
+            self.features.std_scale(by=by.features, dim=dim)
+        if scale_labels:
+            self.labels.std_scale(by=by.labels, dim=dim)
 
     def __len__(
         self,
     ) -> int: 
-        return len(self.features)
-    
-    def __iter__(self): # fix this
-        return (
-            self.features,
-            self.labels,
-        ).__iter__()
-    
-    def __eq__( # fix this
-        self,
-        other,
-    ) -> bool:
-        for self_array, other_array in zip(
-            self, 
-            other
-        ):
-            if not equal(
-                self_array, 
-                other_array,
-            ):
-                return False
-        return True
+        return max(
+            [
+                len(x) for x in 
+                (
+                    self.features, 
+                    self.labels, 
+                    self.trials,
+                ) 
+                if x is not None
+            ]
+        )
 
     @classmethod
     def from_pandas(
         cls,
-        features:DataFrame|Series,
-        labels:DataFrame|Series=DataFrame(dtype="int64"),
-        trials:Series|Index=Series(dtype="int64"),
+        features:DataFrame|Series|None=None,
+        labels:DataFrame|Series|None=None,
+        trials:Series|Index|None=None,
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
-        trials_dtype:str|None="int64",
+        trials_dtype:str|None=None,#"int64",
     ):
-        features_tensor = torch_tensor_from_pandas(
-            features, 
-            dtype=features_dtype,
-        )
-        labels_tensor = torch_tensor_from_pandas(
-            labels, 
-            dtype=labels_dtype,
-        )
-        trials_tensor = torch_tensor_from_pandas(
-            trials,
-            dtype=trials_dtype,
-        )
-        metadata = Dataset_Metadata(
-            trials=trials_tensor
-        )
-        return cls(
-            metadata=metadata,
-            features=features_tensor, 
-            labels=labels_tensor,
-        )
+        kwargs = {}
+        for arg, pandas_obj, dtype in zip(
+            ("features", "labels", "trials"),
+            (features, labels, trials),
+            (features_dtype, labels_dtype, trials_dtype),
+        ):
+            if pandas_obj is None:
+                continue
+            tensor = torch_tensor_from_pandas(
+                pandas_obj, 
+                dtype=dtype
+            )
+            data = Data(tensor)
+            kwargs[arg] = data
+        return cls(**kwargs)
     
     @classmethod
     def from_pandas_parquet_file(
         cls, 
         path:Path|str, 
-        features:list[str], 
-        label:str|None=None,
-        trial_index:str="trial_num",
+        features:list[str]|None=None, 
+        labels:list[str]|None=None,
+        trials:str|None=None,#"trial_num",
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
+        trials_dtype:str|None=None,
     ):
-        df = read_parquet(path)
-        trials = df.index.get_level_values(trial_index)
-        labels = Series(dtype="int64") if label is None else df[label]
+        dataframe = read_parquet(path)
+        kwargs = {
+            "features": (
+                None 
+                if features is None 
+                else dataframe[features]
+            ),
+            "labels": (
+                None
+                if labels is None
+                else dataframe[labels]
+            ),
+            "trials": (
+                None
+                if trials is None
+                else dataframe.index.get_level_values(trials)
+            )
+        }
         return cls.from_pandas(
-            df[features], 
-            labels=labels,
-            trials=trials,
+            **kwargs,
             features_dtype=features_dtype, 
             labels_dtype=labels_dtype,
+            trials_dtype=trials_dtype,
         )
     
-    def to_device(
+    def to(
         self, 
-        device:str,
+        arg:Any,
     ) -> None:
-        self.features = self.features.to(
-            device
-        )
-        self.labels = self.labels.to(
-            device
-        ) 
-    
-    def std_scale_features(
-        self, 
-        std_scale_means:Tensor, 
-        std_scale_stds:Tensor, 
-        save_orig:bool=False,
-    ):
-        self.metadata.std_scale_means = std_scale_means
-        self.metadata.std_scale_stds = std_scale_stds
-        if save_orig:
-            self.metadata.orig_features = self.features
-        self.features = std_scale(
-            self.features, 
-            std_scale_means, 
-            std_scale_stds,
-        )
+        if self.features is not None:
+            self.features.to(arg)
+        if self.labels is not None:
+            self.labels.to(arg) 
+        if self.trials is not None:
+            self.trials.to(arg)
 
     def bin_labels(
         self,
@@ -317,47 +345,37 @@ class Dataset:
             num_labels,
         )
 
-    def group_by_trial(self,):
-        if len(self.metadata.trials) != len(self.labels):
-            raise ValueError(
-                "Mismatch in dataset array lengths."
-            )
-        selection = (
-            self.metadata.trials.unique().unsqueeze(-1) 
-            == self.metadata.trials
-        )
-        self.grouped_features = [
-            self.features[trial_select] 
-            for trial_select in selection
-        ]
-        self.grouped_labels = [
-            self.labels[trial_select] 
-            for trial_select in selection
-        ]
-        self.grouped_trials = [
-            self.metadata.trials[trial_select] 
-            for trial_select in selection
-        ]
+    def group_by_trial(
+        self,
+    ):
+        if self.features is not None:
+            self.features.group(by=self.trials)
+        if self.labels is not None:
+            self.labels.group(by=self.trials)
+        if self.trials is not None:
+            self.trials.group(by=self.trials)
 
 
 @dataclass
 class Dataset_Set_File_Paths:
-    train:str|Path
-    val:str|Path
+    train:str|Path|None = None
+    val:str|Path|None = None
     test:str|Path|None = None
 
     def __post_init__(self):
-        self.train = Path(self.train)
-        self.val = Path(self.val)
+        if self.train is not None:
+            self.train = Path(self.train)
+        if self.val is not None:
+            self.val = Path(self.val)
         if self.test is not None:
             self.test = Path(self.test)
 
 
 @dataclass
 class Dataset_Set:
-    train: Dataset
-    val: Dataset
-    test: Dataset
+    train: Dataset|None = None
+    val: Dataset|None = None
+    test: Dataset|None = None
 
     def __iter__(self):
         return (
@@ -370,21 +388,25 @@ class Dataset_Set:
     def from_pandas_parquet_files(
         cls,
         paths:Dataset_Set_File_Paths,
-        features:list[str],
-        label:str|None=None,
+        features:list[str]|None=None,
+        labels:list[str]|None=None,
+        trials:str|None=None,
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
+        trials_dtype:str|None=None,
     ):
         datasets = {
             split: (
-                Dataset.from_pandas_parquet_file(
+                None if path is None
+                else Dataset.from_pandas_parquet_file(
                     path, 
-                    features, 
-                    label, 
+                    features=features, 
+                    labels=labels, 
+                    trials=trials,
                     features_dtype=features_dtype, 
-                    labels_dtype=labels_dtype
-                ) if path is not None
-                else Dataset()
+                    labels_dtype=labels_dtype,
+                    trials_dtype=trials_dtype,
+                )
             )
             for split, path in asdict(paths).items()
         }
@@ -392,21 +414,24 @@ class Dataset_Set:
     
     def apply_std_scale(
         self,
+        scale_features:bool=True,
+        scale_labels:bool=False,
+        dim:int=0,
     ) -> None:
-        std_scale_means = mean(
-            self.train.features, 
-            dim=0
-        )
-        std_scale_stds = std(
-            self.train.features, 
-            dim=0
-        )
-        for dset in self:
-            if dset == Dataset():
-                continue
-            dset.std_scale_features(
-                std_scale_means, 
-                std_scale_stds
+        
+        if self.val is not None:
+            self.val.std_scale(
+                self.train, 
+                scale_features=scale_features, 
+                scale_labels=scale_labels, 
+                dim=dim,
+            )
+        if self.train is not None:
+            self.train.std_scale(
+                self.train,
+                scale_features=scale_features,
+                scale_labels=scale_labels,
+                dim=dim,
             )
 
     def apply_binning(
