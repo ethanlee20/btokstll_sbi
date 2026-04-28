@@ -1,9 +1,20 @@
 
-import torch
-import numpy as np
-import normflows as nf
-from matplotlib import pyplot as plt
 from tqdm import tqdm
+import numpy as np
+from matplotlib import pyplot as plt
+from torch import (
+    meshgrid, 
+    linspace, 
+    cat, 
+    exp, 
+    isnan, 
+    isinf, 
+    randint, 
+    cartesian_prod, 
+    no_grad,
+)
+from torch.optim import AdamW
+import normflows as nf
 
 from btokstll_sbi_tools.model import (
     Dataset_Set_File_Paths,
@@ -36,28 +47,27 @@ turn_on_dark_plots()
 turn_on_hq_plots()
 plot_interval = (-2.25, 2.25)
 ticks = [-2, -1, 0, 1, 2]
-xlabel = r"$\cos\theta_\mu$ (normalized)"
-ylabel = r"$\delta C_9$ (normalized)"
+cos_theta_mu_ax_label = r"$\cos\theta_\mu$ (normalized)"
+delta_c9_ax_label = r"$\delta C_9$ (normalized)"
 label_fontsize = 18
 
 
 # grid setup
 
 grid_size = 200
-xx, yy = torch.meshgrid(
-    torch.linspace(*plot_interval, grid_size), 
-    torch.linspace(*plot_interval, grid_size), 
+xx, yy = meshgrid(
+    linspace(*plot_interval, grid_size), 
+    linspace(*plot_interval, grid_size), 
     indexing="ij"
 )
-zz = torch.cat(
+zz = cat(
     [
         xx.unsqueeze(2), 
         yy.unsqueeze(2)
     ], 
     dim=2,
 ).view(-1, 2)
-zz = zz.to(device)
-breakpoint()
+
 
 # load data
 
@@ -103,8 +113,8 @@ set_ax_ticks(ax, ticks)
 set_ax_bounds(ax, plot_interval)
 set_ax_labels(
     ax, 
-    xlabel, 
-    ylabel, 
+    cos_theta_mu_ax_label, 
+    delta_c9_ax_label, 
     fontsize=label_fontsize
 )
 save_fig_and_close("plots/target.png")
@@ -123,7 +133,7 @@ ax.hist(
 # set_ax_bounds(ax, xbounds=plot_interval)
 set_ax_labels(
     ax, 
-    xlabel=ylabel, 
+    xlabel=delta_c9_ax_label, 
     fontsize=label_fontsize
 )
 save_fig_and_close("plots/target_labels.png")
@@ -134,13 +144,13 @@ breakpoint()
 model.eval()
 log_prob = model.log_prob(zz).to('cpu').view(*xx.shape)
 model.train()
-prob = torch.exp(log_prob)
-prob[torch.isnan(prob)] = 0
+prob = exp(log_prob)
+prob[isnan(prob)] = 0
 
 fig, ax = plt.subplots()
 ax.pcolormesh(xx, yy, prob.data.numpy())
 ax.set_aspect("equal")
-set_ax_labels(ax, xlabel, ylabel, fontsize=label_fontsize)
+set_ax_labels(ax, cos_theta_mu_ax_label, delta_c9_ax_label, fontsize=label_fontsize)
 save_fig_and_close("plots/initial.png")
 
 
@@ -156,7 +166,7 @@ if retrain:
         shuffle=True
     )
     loss_hist = np.array([])
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+    optimizer = AdamW(model.parameters(), lr=3e-4)
 
     it = 0
     pic_at = (0, 50, 100, 999, 1999, 2999)
@@ -170,7 +180,7 @@ if retrain:
             loss = model.forward_kld(features)
             
             # Do backprop and optimizer step
-            if ~(torch.isnan(loss) | torch.isinf(loss)):
+            if ~(isnan(loss) | isinf(loss)):
                 loss.backward()
                 optimizer.step()
             
@@ -182,13 +192,13 @@ if retrain:
                 model.eval()
                 log_prob = model.log_prob(zz)
                 model.train()
-                prob = torch.exp(log_prob.to('cpu').view(*xx.shape))
-                prob[torch.isnan(prob)] = 0
+                prob = exp(log_prob.to('cpu').view(*xx.shape))
+                prob[isnan(prob)] = 0
 
                 fig, ax = plt.subplots()
                 ax.pcolormesh(xx, yy, prob.data.numpy())
                 ax.set_aspect('equal')
-                set_ax_labels(ax, xlabel, ylabel, fontsize=label_fontsize)
+                set_ax_labels(ax, cos_theta_mu_ax_label, delta_c9_ax_label, fontsize=label_fontsize)
                 save_fig_and_close(f"plots/model_at_{it}.png")
             
             it += 1
@@ -209,7 +219,7 @@ else:
 # Plot unnormalized p(y | x) for 3 training data points
 
 num_samples = 3
-idx = torch.randint(
+idx = randint(
     low=0, 
     high=len(dset_set.train.features), 
     size=(num_samples,)
@@ -218,7 +228,7 @@ data = dset_set.train.features[idx]
 labels = data[:, 1]
 features = data[:, 0]
 
-input_to_model = torch.cartesian_prod(
+input_to_model = cartesian_prod(
     features, 
     yy[0,:],
 )#.view(
@@ -229,10 +239,10 @@ input_to_model = torch.cartesian_prod(
 input_to_model = input_to_model.to(device)
 
 model.eval()
-with torch.no_grad():
+with no_grad():
     log_prob = model.log_prob(input_to_model)
-    prob = torch.exp(log_prob.to('cpu'))
-    prob[torch.isnan(prob)] = 0
+    prob = exp(log_prob.to('cpu'))
+    prob[isnan(prob)] = 0
     prob = prob.view(num_samples, grid_size, -1)
 
 fig, ax = plt.subplots()
@@ -263,7 +273,7 @@ for dist, label, feat, color in zip(prob, labels, features, colors):
     )
 set_ax_labels(
     ax, 
-    ylabel, 
+    delta_c9_ax_label, 
     r"$\propto p(\delta C_9 \,|\, \cos\theta_\mu)$", 
     fontsize=label_fontsize
 )
@@ -271,12 +281,12 @@ ax.legend(loc="upper right")
 ax.set_box_aspect(1)
 save_fig_and_close(f"plots/model_dists.png")
 
-with torch.no_grad():
+with no_grad():
     model.eval()
     log_prob = model.log_prob(zz)
     model.train()
-    prob = torch.exp(log_prob.to('cpu').view(*xx.shape))
-    prob[torch.isnan(prob)] = 0
+    prob = exp(log_prob.to('cpu').view(*xx.shape))
+    prob[isnan(prob)] = 0
 
     fig, ax = plt.subplots()
     ax.pcolormesh(xx, yy, prob.data.numpy())
@@ -286,7 +296,7 @@ with torch.no_grad():
 
     ax.set_aspect('equal')
 
-    set_ax_labels(ax, xlabel, ylabel, fontsize=label_fontsize)
+    set_ax_labels(ax, cos_theta_mu_ax_label, delta_c9_ax_label, fontsize=label_fontsize)
     save_fig_and_close(f"plots/final_model_annotated.png")
 
 

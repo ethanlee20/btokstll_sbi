@@ -5,6 +5,7 @@
 # ignore these directories
 __pycache__
 .env
+.venv
 
 # track these file types
 !*.py

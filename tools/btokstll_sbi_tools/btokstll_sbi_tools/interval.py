@@ -1,16 +1,6 @@
 
+from typing import Iterator
 from dataclasses import dataclass
-from typing import Any, Iterator
-
-
-def are_instance(
-    objs:Any, 
-    classinfo:Any,
-)-> bool:
-    for o in objs:
-        if not isinstance(o, classinfo):
-            return False
-    return True
 
 
 @dataclass
@@ -33,4 +23,3 @@ class Interval:
             self.left, 
             self.right
         ).__iter__()
-
