@@ -1,15 +1,21 @@
 
 from matplotlib.pyplot import subplots
-
-from torch import linspace, cartesian_prod, no_grad, sum
-
+from pandas import read_parquet
+from torch import (
+    tensor,
+    linspace, 
+    cartesian_prod, 
+    no_grad, 
+    sum,
+)
 from normflows import NormalizingFlow
 from normflows.flows import AffineCouplingBlock, Permute
 from normflows.distributions.base import DiagGaussian
 from normflows.nets import MLP
 
-from btokstll_sbi_tools.model.util import select_device, load_torch_model_state_dict
-from btokstll_sbi_tools.util.plot import (
+from btokstll_sbi_tools.hardware import select_device
+from btokstll_sbi_tools.state_dict import load_torch_model_state_dict
+from btokstll_sbi_tools.plot import (
     turn_on_dark_plots, 
     turn_on_hq_plots, 
     set_ax_labels, 
@@ -17,7 +23,9 @@ from btokstll_sbi_tools.util.plot import (
     set_ax_ticks,
     save_fig_and_close,
 )
-from btokstll_sbi_tools.model.util import Dataset_Set_File_Paths, Dataset_Set
+from btokstll_sbi_tools.dataset import DatasetSet
+from btokstll_sbi_tools.scaling import Std_Scaler
+from btokstll_sbi_tools.group import group
 
 
 # plot setup
@@ -38,20 +46,51 @@ device = select_device()
 
 # load data
 
-data_paths = Dataset_Set_File_Paths(
-    "data/vary_c9_train.parquet", 
-    "data/vary_c9_val.parquet",
-)
-dset_set = Dataset_Set.from_pandas_parquet_files(
-    data_paths, 
+dset_set = DatasetSet.from_pandas_parquet_files(
+    train_path="data/vary_dc9_train.parquet", 
+    val_path="data/vary_dc9_val.parquet", 
     features=["cos_theta_mu",],
     labels=["wc_set_d_c_9",], 
-    trials="trial_num",
     features_dtype="float32",
     labels_dtype="float32",
 )
-dset_set.apply_std_scale(scale_features=True, scale_labels=True)
-dset_set.val.group_by_trial()
+
+val_trial_nums = tensor(
+    read_parquet("data/vary_dc9_val.parquet")
+    .index.get_level_values("trial_num")
+)
+
+
+# standard scale
+
+unscaled_train_feature_means = dset_set.train.features.mean(dim=0)
+unscaled_train_feature_stds = dset_set.train.features.std(dim=0)
+unscaled_train_label_means = dset_set.train.labels.mean(dim=0)
+unscaled_train_label_stds = dset_set.train.labels.std(dim=0)
+
+features_std_scaler = Std_Scaler(
+    means=unscaled_train_feature_means, 
+    stdevs=unscaled_train_feature_stds,
+)
+labels_std_scaler = Std_Scaler(
+    means=unscaled_train_label_means,
+    stdevs=unscaled_train_label_stds,
+)
+
+dset_set.val.features = features_std_scaler.std_scale(dset_set.val.features)
+dset_set.val.labels = features_std_scaler.std_scale(dset_set.val.labels)
+
+
+# group by trial
+
+grouped_val_features = group(
+    data=dset_set.val.features, 
+    by=val_trial_nums
+)
+grouped_val_labels = group(
+    data=dset_set.val.labels, 
+    by=val_trial_nums
+)
 
 
 # setup model
@@ -85,8 +124,8 @@ sample_at = linspace(*plot_interval, num_samples)
 fig, ax = subplots()
 alpha = 0.8
 for i in range(5):
-    features = dset_set.val.features[i].squeeze()
-    label = dset_set.val.labels[i].unique().item()
+    features = grouped_val_features[i].squeeze()
+    label = grouped_val_labels[i].unique().item()
 
     input_to_model = cartesian_prod(
         features, 

@@ -104,21 +104,6 @@ class Dataset:
 
 
 @dataclass
-class Dataset_Set_File_Paths:
-    train:str|Path|None = None
-    val:str|Path|None = None
-    test:str|Path|None = None
-
-    def __post_init__(self):
-        if self.train is not None:
-            self.train = Path(self.train)
-        if self.val is not None:
-            self.val = Path(self.val)
-        if self.test is not None:
-            self.test = Path(self.test)
-
-
-@dataclass
 class DatasetSet:
     train: Dataset|None = None
     val: Dataset|None = None

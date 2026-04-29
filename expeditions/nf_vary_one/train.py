@@ -3,6 +3,7 @@ from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
 from torch import (
+    tensor,
     meshgrid, 
     linspace, 
     cat, 
@@ -16,12 +17,11 @@ from torch import (
 from torch.optim import AdamW
 import normflows as nf
 
-from btokstll_sbi_tools.model import (
-    Dataset_Set_File_Paths,
-    Dataset_Set,
-    Data_Loader,
+from btokstll_sbi_tools.dataset import (
+    DatasetSet,
 )
-from btokstll_sbi_tools.util.plot import (
+from btokstll_sbi_tools.train import Data_Loader
+from btokstll_sbi_tools.plot import (
     set_ax_bounds, 
     set_ax_labels,
     set_ax_ticks,
@@ -29,11 +29,14 @@ from btokstll_sbi_tools.util.plot import (
     turn_on_hq_plots,
     save_fig_and_close,
 )
-from btokstll_sbi_tools.model.util import (
+from btokstll_sbi_tools.hardware import (
     select_device, 
+)
+from btokstll_sbi_tools.state_dict import (
     save_torch_model_state_dict, 
     load_torch_model_state_dict,
 )
+from btokstll_sbi_tools.scaling import Std_Scaler
 
 
 # device setup
@@ -71,16 +74,29 @@ zz = cat(
 
 # load data
 
-data_paths = Dataset_Set_File_Paths(
-    train="data/vary_c9_train.parquet", 
-    val="data/vary_c9_val.parquet",
-)
-dset_set = Dataset_Set.from_pandas_parquet_files(
-    data_paths, 
-    features=["cos_theta_mu", "wc_set_d_c_9"], 
+dset_set = DatasetSet.from_pandas_parquet_files(
+    train_path="data/vary_dc9_train.parquet", 
+    val_path="data/vary_dc9_val.parquet", 
+    feature_names=["cos_theta_mu", "wc_set_d_c_9"], 
     features_dtype="float32",
 )
-dset_set.apply_std_scale()
+
+
+# standard scale data
+
+unscaled_train_means = dset_set.train.features.mean(dim=0)
+unscaled_train_stds = dset_set.train.features.std(dim=0)
+std_scaler = Std_Scaler(
+    means=unscaled_train_means, 
+    stdevs=unscaled_train_stds,
+)
+
+dset_set.train.features = std_scaler.std_scale(
+    dset_set.train.features
+)
+dset_set.val.features = std_scaler.std_scale(
+    dset_set.val.features
+)
 
 
 # setup model

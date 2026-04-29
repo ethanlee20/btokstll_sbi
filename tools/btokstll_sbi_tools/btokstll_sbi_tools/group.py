@@ -63,31 +63,3 @@ def group(
     grouped = [data[i] for i in selection]
     return grouped
 
-
-if __name__ == "__main__":
-    
-
-
-    print(
-        _all(
-            Tensor([
-                [
-                    [True, True], 
-                    [True, False]
-                ],
-                [
-                    [True, True], 
-                    [True, False]
-                ],
-
-            ]),
-            keep_dims=(0,1)
-        )
-    )
-
-    print(
-        group(
-            data=Tensor([[1,2],[3,4],[5,6]]),
-            by=Tensor([[4,4],[4,2],[4,4]]),
-        )
-    )
