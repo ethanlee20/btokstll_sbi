@@ -1,6 +1,7 @@
 
 from pathlib import Path
 from dataclasses import dataclass
+from math import floor
 
 from matplotlib.pyplot import subplots, close
 from torch import (
@@ -9,11 +10,13 @@ from torch import (
     linspace, 
     abs, 
     bucketize, 
-    bin_count, 
+    bincount, 
     all, 
     arange, 
     randperm, 
     reshape,
+    cat,
+    float32
 )
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import LRScheduler
@@ -23,6 +26,7 @@ from torch.nn import (
     ReLU, 
     LogSoftmax, 
     CrossEntropyLoss,
+    Sequential,
 )
 from pandas import DataFrame, read_parquet
 
@@ -105,7 +109,7 @@ class Dataset:
         test_path:str|Path|None=None,
         x_cols:list[str]|None=None,
         y_cols:list[str]|None=None,
-    )
+    ):
         paths = {
             "train": train_path,
             "val": val_path,
@@ -172,7 +176,7 @@ class Binner:
     mids : Tensor
 
     @classmethod
-    from_interval(
+    def from_interval(
         cls, 
         interval:tuple, 
         num:int,
@@ -291,14 +295,15 @@ def all_(
         d for d in dims 
         if d not in keep_dims
     )
-    result = all(tensor, dim=reduce_dims)
+    result = all(input, dim=reduce_dims)
     return result
 
 
 def group(
     data:Tensor, 
     by:Tensor,
-) -> Tensor|list[Tensor]:
+    clip:bool=True,
+) -> Tensor:
     uniques = by.unique(dim=0)
     uniques = uniques.unsqueeze(dim=1)
     select = uniques == by
@@ -307,13 +312,13 @@ def group(
         keep_dims=(0,1),
     )
     grouped = [data[i] for i in select]
-    try: 
-        return cat(
-            [g.unsqueeze(-1) for g in grouped], 
-            dim=0,
-        )
-    except RuntimeError:          # fix this
-        return grouped
+    if clip:
+        min_ = min([len(g) for g in grouped])
+        grouped = [g[:min_] for g in grouped]
+    return cat(
+        [g.unsqueeze(0) for g in grouped], 
+        dim=0,
+    )
 
 
 def make_batched_indices(
@@ -342,7 +347,7 @@ class DataLoader:
     batch_size : int
     shuffle : bool = True
 
-    def __postinit__(self):
+    def __post_init__(self):
         self.set_indices()
 
     def set_indices(self):
@@ -501,7 +506,7 @@ class Model(Module):
 train_path = "data/vary_dc9_train.parquet"
 val_path = "data/vary_dc9_val.parquet"
 
-x_cols = ["cos_theta_mu",]
+x_cols = ["cos_theta_mu", "q_squared"]
 y_cols = ["delta_wc_values_dc9",]
 
 dset = Dataset.from_pandas(
@@ -519,27 +524,30 @@ binner = Binner.from_interval(
     num=num_bins
 )
 
-unbinned_train_y = dset.train.y.copy()
-unbinned_val_y = dset.val.y.copy()
+unbinned_train_y = dset.train.y.detach().clone()
+unbinned_val_y = dset.val.y.detach().clone()
 
 dset.train.y = binner.bin(dset.train.y)
 dset.val.y = binner.bin(dset.val.y)
 
 std_scaler = StdScaler.from_data(dset.train.x)
 
-unscaled_train_x = dset.train.x.copy()
-unscaled_val_x = dset.val.x.copy()
+unscaled_train_x = dset.train.x.detach().clone()
+unscaled_val_x = dset.val.x.detach().clone()
 
 dset.train.x = std_scaler.scale(dset.train.x)
 dset.val.x = std_scaler.scale(dset.val.x)
+
+dset.train.x = dset.train.x.to(float32)
+dset.val.x = dset.val.x.to(float32)
 
 dset.train.x = group(data=dset.train.x, by=dset.train.y)
 dset.train.y = group(data=dset.train.y, by=dset.train.y)
 dset.val.x = group(data=dset.val.x, by=dset.val.y)
 dset.val.y = group(data=dset.val.y, by=dset.val.y)
 
-dset.train.y = dset.train.y.unique(dim=1)
-dset.val.y = dset.val.y.unique(dim=1)
+dset.train.y = dset.train.y.unique(dim=1).squeeze()
+dset.val.y = dset.val.y.unique(dim=1).squeeze()
 
 weights = calc_weights(
     labels=dset.train.y, 
@@ -553,7 +561,7 @@ device = "cuda"
 dset.to_device(device)
 model = model.to(device)
 
-train_batch_size = 64
+train_batch_size = 4
 eval_batch_size = 4
 
 train_dloader = DataLoader(
@@ -561,9 +569,11 @@ train_dloader = DataLoader(
     batch_size=train_batch_size,
 )
 eval_dloader = DataLoader(
-    dset.train, 
+    dset.val, 
     batch_size=eval_batch_size,
 )
+
+breakpoint()
 
 loss_fn = CrossEntropyLoss(
     weight=weights
@@ -576,7 +586,7 @@ num_epochs = 10
 
 train_losses = []
 eval_losses = []
-for epoch in num_epochs:
+for epoch in range(num_epochs):
     train_loss, eval_loss = train_eval_epoch(
         train_dloader=train_dloader, 
         eval_dloader=eval_dloader, 
@@ -586,6 +596,11 @@ for epoch in num_epochs:
     )
     train_losses.append(train_loss)
     val_losses.append(val_loss)
+    print(
+        f"Finished epoch: {epoch}"
+        f"\nTrain loss: {train_loss}"
+        f"\nVal loss: {val_loss}"
+    )
 
 fig, ax = subplots(layout="constrained")
 ax.plot(train_losses, label="train")
