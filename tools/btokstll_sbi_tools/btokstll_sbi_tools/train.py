@@ -17,7 +17,7 @@ from torch.nn import Module, CrossEntropyLoss
 from torch.optim import Optimizer, Adam, AdamW
 from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau, CosineAnnealingLR
 
-from .interval import are_instance, Interval
+from .interval import Interval
 from .type import are_instance
 from .json_ import dump_json, load_json
 from .dataset import Dataset

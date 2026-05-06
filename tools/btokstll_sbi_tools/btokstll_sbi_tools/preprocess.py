@@ -6,7 +6,8 @@ from pandas import DataFrame, Series, concat, read_parquet
 from uproot import open
 from tqdm import tqdm
 
-from .util.type import flatten_dict, load_json
+from .dict import flatten_dict 
+from .json_ import load_json
 
 
 def square_matrix_transform(matrix_dataframe, vector_dataframe):

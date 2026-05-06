@@ -27,19 +27,23 @@ class Dataset:
         features_dtype:str|None=None,
         labels_dtype:str|None=None,
     ):
-        if features is not None:
-            features = torch_tensor_from_pandas(
+        features_ = (
+            None if features is None 
+            else torch_tensor_from_pandas(
                 features,
-                dtype=features_dtype
+                dtype=features_dtype,
             )
-        if labels is not None:
-            labels = torch_tensor_from_pandas(
+        )
+        labels_ = (
+            None if labels is None 
+            else torch_tensor_from_pandas(
                 labels,
-                dtype=labels_dtype
+                dtype=features_dtype,
             )
+        )
         return cls(
-            features=features, 
-            labels=labels
+            features=features_,
+            labels=labels_,
         )
     
     @classmethod
@@ -89,15 +93,22 @@ class Dataset:
         self,
     ) -> int: 
         self._ensure_lengths_match()
-        return len(self.labels)
+        if self.labels is not None:
+            return len(self.labels)
+        elif self.features is not None:
+            return len(self.features)
+        else:
+            raise ValueError(
+                "Can't get length of empty dataset."
+            )
     
     def __eq__(
         self,
         other,
     ) -> bool:
         if isinstance(other, Dataset):
-            return (
-                (self.features == other.features).all() 
+            return bool(
+                (self.features == other.features).all()
                 and (self.labels == other.labels).all()
             )
         return False
@@ -112,9 +123,9 @@ class DatasetSet:
     @classmethod
     def from_pandas_parquet_files(
         cls,
-        train_path:str|Path|None,
-        val_path:str|Path|None,
-        test_path:str|Path|None,
+        train_path:str|Path|None=None,
+        val_path:str|Path|None=None,
+        test_path:str|Path|None=None,
         feature_names:list[str]|None=None,
         label_names:list[str]|None=None,
         features_dtype:str|None=None,
@@ -132,7 +143,7 @@ class DatasetSet:
                 label_names=label_names, 
                 features_dtype=features_dtype, 
                 labels_dtype=labels_dtype
-            ) 
+            ) if path is not None else None
             for split, path in paths.items()
         }
         return cls(
@@ -141,24 +152,24 @@ class DatasetSet:
             test=datasets["test"],
         )
     
-    def apply_std_scale(
-        self,
-        scale_features:bool=True,
-        scale_labels:bool=False,
-        dim:int=0,
-    ) -> None:
+    # def apply_std_scale(
+    #     self,
+    #     scale_features:bool=True,
+    #     scale_labels:bool=False,
+    #     dim:int=0,
+    # ) -> None:
         
-        if self.val is not None:
-            self.val.std_scale(
-                self.train, 
-                scale_features=scale_features, 
-                scale_labels=scale_labels, 
-                dim=dim,
-            )
-        if self.train is not None:
-            self.train.std_scale(
-                self.train,
-                scale_features=scale_features,
-                scale_labels=scale_labels,
-                dim=dim,
-            )
+    #     if self.val is not None:
+    #         self.val.std_scale(
+    #             self.train, 
+    #             scale_features=scale_features, 
+    #             scale_labels=scale_labels, 
+    #             dim=dim,
+    #         )
+    #     if self.train is not None:
+    #         self.train.std_scale(
+    #             self.train,
+    #             scale_features=scale_features,
+    #             scale_labels=scale_labels,
+    #             dim=dim,
+    #         )

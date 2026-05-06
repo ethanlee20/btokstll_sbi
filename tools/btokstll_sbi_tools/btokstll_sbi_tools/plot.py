@@ -40,9 +40,9 @@ def save_fig_and_close(
 
 def set_ax_bounds(
     ax:Axes, 
-    bounds:tuple[float,float]|None=None, 
-    xbounds:tuple[float,float]|None=None, 
-    ybounds:tuple[float,float]|None=None,
+    bounds:tuple[float,float]|tuple[None, None]=(None, None), 
+    xbounds:tuple[float,float]|tuple[None, None]=(None, None), 
+    ybounds:tuple[float,float]|tuple[None, None]=(None, None),
 ):
     if (
         (bounds is None) 
@@ -60,17 +60,13 @@ def set_ax_bounds(
         raise ValueError
 
     xbounds = (
-        bounds if bounds is not None 
+        bounds if bounds 
         else xbounds
     )
     ybounds = (
         bounds if bounds is not None 
-        else ybounds
+        else (None, None)
     )
-    if xbounds is None: # get rid of red squiggles
-        xbounds = (0, 0)
-    if ybounds is None:
-        ybounds = (0, 0)
     ax.set_xbound(*xbounds)
     ax.set_ybound(*ybounds)
 
