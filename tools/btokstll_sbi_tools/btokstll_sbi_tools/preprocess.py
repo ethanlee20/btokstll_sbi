@@ -963,9 +963,10 @@ def _root_to_parquet(
         )
     dataframe = _open_simulated_data_root_file(
         root_file_path
-    ).drop(
-        columns="__eventType__"
     )
+    #.drop(
+    #    columns="__eventType__"
+    #)
     save_path = root_file_path.with_suffix(
         ".parquet"
     )
