@@ -1,6 +1,7 @@
+from math import floor
 from dataclasses import dataclass, field
 
-from torch import Tensor, reshape, arange, floor
+from torch import Tensor, reshape, arange
 
 from .util import are_instance, shuffle_tensor
 from .dataset import Dataset

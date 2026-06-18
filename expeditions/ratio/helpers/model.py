@@ -6,7 +6,7 @@ class MLP(Module):
     def __init__(self):
         super().__init__()
         self.layers = Sequential(
-            Linear(4, 16),
+            Linear(5, 16),
             ReLU(),
             Linear(16, 32),
             ReLU(),

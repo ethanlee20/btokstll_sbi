@@ -26,12 +26,12 @@ def filter(
 
 def main():
     df = read_parquet(
-        "data/vary_dc9_val.parquet"
+        "data/vary_dc9_train.parquet"
     )
     df = filter(df)
-    df.rename(columns={"delta_wc_values_dc9": "dc9"})
+    df = df.rename(columns={"delta_wc_values_dc9": "dc9"})
     df.to_parquet(
-        "data/val_small.parquet"
+        "data/train_small.parquet"
     )
 
 

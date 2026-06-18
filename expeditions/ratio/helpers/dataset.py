@@ -78,7 +78,7 @@ def dataset_from_dataframe(
         if label_names is not None
         else dataset_from_pandas(
             features_pandas,
-            features_dtype,
+            features_dtype=features_dtype,
         )
     )
 

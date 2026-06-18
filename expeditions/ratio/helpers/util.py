@@ -1,7 +1,7 @@
 from typing import Any
 
 from pandas import DataFrame, Series, Index
-from torch import cuda, device, Tensor, randperm, from_numpy
+from torch import cuda, device, Tensor, randperm, from_numpy, stack
 from torch.nn import Module
 
 
@@ -15,6 +15,13 @@ def are_instance(
     return True
 
 
+def all_same(a: list):
+    unique = set(a)
+    if len(unique) == 1:
+        return True
+    return False
+
+
 def shuffle_pandas(a: DataFrame | Series) -> DataFrame:
     a_shuf = a.sample(frac=1, replace=False)
     return a_shuf
@@ -25,6 +32,25 @@ def shuffle_tensor(a: Tensor) -> Tensor:
     shuffled_indices = randperm(num_rows)
     a = a[shuffled_indices]
     return a
+
+
+def pandas_from_tensor(t: Tensor, names: str | list[str]) -> DataFrame | Series:
+
+    if t.dim() not in (1, 2):
+        raise ValueError(
+            "Input tensor must be one or two dimensional."
+            f"\nGot {t.dim()} dimensions."
+        )
+
+    numpy_array = t.numpy(force=True)
+
+    pandas_obj = (
+        Series(numpy_array, name=names)
+        if numpy_array.ndim == 1
+        else DataFrame(numpy_array, columns=names)
+    )
+
+    return pandas_obj
 
 
 def tensor_from_pandas(
@@ -43,22 +69,37 @@ def tensor_from_pandas(
     return tensor
 
 
-def pandas_from_tensor(t: Tensor, names: str | list[str]) -> DataFrame | Series:
+def all_(
+    input: Tensor,
+    not_dim: int | tuple,
+) -> Tensor:
+    """
+    torch.all but specify dimensions to not reduce.
+    """
+    if isinstance(not_dim, int):
+        not_dim = (not_dim,)
+    tensor_dims = range(input.dim())
+    dim = tuple(d for d in tensor_dims if d not in not_dim)
+    out = all(input, dim=dim)
+    return out
 
-    if t.dims not in (1, 2):
-        raise ValueError(
-            "Input tensor must be one or two dimensional." f"\nGot {t.dims} dimensions."
-        )
 
-    numpy_array = t.numpy(force=True)
-
-    pandas_obj = (
-        Series(numpy_array, name=names)
-        if numpy_array.dims == 1
-        else DataFrame(numpy_array, columns=names)
+def group(
+    data: Tensor,
+    by: Tensor,
+) -> Tensor | list[Tensor]:
+    uniques = by.unique(dim=0).unsqueeze(dim=1)
+    overlap = by == uniques
+    selection = all_(
+        overlap,
+        not_dim=(0, 1),
     )
-
-    return pandas_obj
+    grouped_list = [data[i] for i in selection]
+    num_per_group = [len(g) for g in grouped_list]
+    if all_same(num_per_group):
+        grouped_tensor = stack(grouped_list)
+        return grouped_tensor
+    return grouped_list
 
 
 def select_device(verbose=True) -> str:
