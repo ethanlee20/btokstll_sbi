@@ -4,3 +4,5 @@ __pycache__
 *.root
 *.pkl
 *.parquet
+*.png
+*.jpg
