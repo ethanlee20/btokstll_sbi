@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import numpy
@@ -6,24 +5,19 @@ from pandas import DataFrame, Series, concat, read_parquet
 from uproot import open
 from tqdm import tqdm
 
-from .dict import flatten_dict 
+from .dict import flatten_dict
 from .json_ import load_json
 
 
 def square_matrix_transform(matrix_dataframe, vector_dataframe):
-
     """
-    Multiply a dataframe of vectors 
-    by a dataframe of square matrices.
+    Multiply a dataframe of vectors by a dataframe of square matrices.
     Return a dataframe.
 
     Only works for square matrices.
     """
 
-    if not (
-        numpy.sqrt(matrix_dataframe.shape[1]) 
-        == vector_dataframe.shape[1]
-    ):
+    if not (numpy.sqrt(matrix_dataframe.shape[1]) == vector_dataframe.shape[1]):
         raise ValueError("Matrix must be square.")
 
     vector_length = vector_dataframe.shape[1]
@@ -46,14 +40,13 @@ def square_matrix_transform(matrix_dataframe, vector_dataframe):
 
 
 def dot_product(vector_dataframe_1, vector_dataframe_2):
-
     """
     Compute the dot products of two vector dataframes.
     """
 
     if not (vector_dataframe_1.shape[1] == vector_dataframe_2.shape[1]):
         raise ValueError("Vector dimensions do not match.")
-    
+
     vector_length = vector_dataframe_1.shape[1]
 
     result_series = Series(
@@ -64,7 +57,7 @@ def dot_product(vector_dataframe_1, vector_dataframe_2):
 
     for dimension in range(vector_length):
         result_series += (
-            vector_dataframe_1.iloc[:, dimension] 
+            vector_dataframe_1.iloc[:, dimension]
             * vector_dataframe_2.iloc[:, dimension]
         )
 
@@ -72,57 +65,39 @@ def dot_product(vector_dataframe_1, vector_dataframe_2):
 
 
 def vector_magnitude(vector_dataframe):
-    
     """
     Compute the magnitude of each vector in a vector dataframe.
     Return a series.
     """
 
     result_series = numpy.sqrt(dot_product(vector_dataframe, vector_dataframe))
-    
+
     return result_series
 
 
 def cosine_angle(vector_dataframe_1, vector_dataframe_2):
-    
     """
     Find the cosine of the angle between vectors in vector dataframes.
     Return a series.
     """
 
-    result_series = (
-        dot_product(vector_dataframe_1, vector_dataframe_2) 
-        / (
-            vector_magnitude(vector_dataframe_1)
-            * vector_magnitude(vector_dataframe_2)
-        )
+    result_series = dot_product(vector_dataframe_1, vector_dataframe_2) / (
+        vector_magnitude(vector_dataframe_1) * vector_magnitude(vector_dataframe_2)
     )
 
     return result_series
 
 
 def cross_product_3d(three_vector_dataframe_1, three_vector_dataframe_2):
-
     """
-    Find the cross product of 3-dimensional vectors 
+    Find the cross product of 3-dimensional vectors
     from two vector dataframes.
     Return a vector dataframe.
     """
 
-    assert (
-        three_vector_dataframe_1.shape[1] 
-        == three_vector_dataframe_2.shape[1] 
-        == 3
-    )
-    assert (
-        three_vector_dataframe_1.shape[0] 
-        == three_vector_dataframe_2.shape[0]
-    )
-    assert (
-        three_vector_dataframe_1.index.equals(
-            three_vector_dataframe_2.index
-        )
-    )
+    assert three_vector_dataframe_1.shape[1] == three_vector_dataframe_2.shape[1] == 3
+    assert three_vector_dataframe_1.shape[0] == three_vector_dataframe_2.shape[0]
+    assert three_vector_dataframe_1.index.equals(three_vector_dataframe_2.index)
 
     three_vector_dataframe_1 = three_vector_dataframe_1.copy()
     three_vector_dataframe_2 = three_vector_dataframe_2.copy()
@@ -131,12 +106,10 @@ def cross_product_3d(three_vector_dataframe_1, three_vector_dataframe_2):
     three_vector_dataframe_2.columns = ["x", "y", "z"]
 
     cross_product_dataframe = DataFrame(
-        data=numpy.zeros(
-            shape=three_vector_dataframe_1.shape
-        ),
+        data=numpy.zeros(shape=three_vector_dataframe_1.shape),
         index=three_vector_dataframe_1.index,
         columns=three_vector_dataframe_1.columns,
-        dtype="float64"
+        dtype="float64",
     )
 
     cross_product_dataframe["x"] = (
@@ -156,7 +129,6 @@ def cross_product_3d(three_vector_dataframe_1, three_vector_dataframe_2):
 
 
 def unit_normal(three_vector_dataframe_1, three_vector_dataframe_2):
-    
     """
     For planes specified by two three-vector dataframes,
     calculate the unit normal vectors.
@@ -164,25 +136,21 @@ def unit_normal(three_vector_dataframe_1, three_vector_dataframe_2):
     """
 
     normal_vector_dataframe = cross_product_3d(
-        three_vector_dataframe_1, 
-        three_vector_dataframe_2
+        three_vector_dataframe_1, three_vector_dataframe_2
     )
-    
+
     unit_normal_vector_dataframe = normal_vector_dataframe.divide(
-        vector_magnitude(normal_vector_dataframe), 
-        axis="index"
+        vector_magnitude(normal_vector_dataframe), axis="index"
     )
 
     return unit_normal_vector_dataframe
 
 
-
 def convert_to_four_momentum_dataframe(dataframe_with_four_columns):
-    
     """
     Create a four-momentum dataframe.
 
-    Create a dataframe where each row 
+    Create a dataframe where each row
     represents a four-momentum.
     The columns are well labeled.
     """
@@ -193,11 +161,10 @@ def convert_to_four_momentum_dataframe(dataframe_with_four_columns):
 
 
 def convert_to_three_momentum_dataframe(dataframe_with_three_columns):
-
     """
     Create a three-momentum dataframe.
 
-    Create a dataframe where each row 
+    Create a dataframe where each row
     represents a three-momentum.
     The columns are well labeled.
     """
@@ -208,27 +175,24 @@ def convert_to_three_momentum_dataframe(dataframe_with_three_columns):
 
 
 def convert_to_three_velocity_dataframe(dataframe_with_three_columns):
-
     """
     Create a three-velocity dataframe.
 
-    Create a dataframe where each row 
+    Create a dataframe where each row
     represents a three-velocity.
     The columns are well labeled.
     """
-    
+
     three_velocity_dataframe = dataframe_with_three_columns.copy()
     three_velocity_dataframe.columns = ["vx", "vy", "vz"]
     return three_velocity_dataframe
 
 
 def calculate_invariant_mass_squared_of_two_particles(
-    particle_one_four_momentum_dataframe, 
-    particle_two_four_momentum_dataframe
+    particle_one_four_momentum_dataframe, particle_two_four_momentum_dataframe
 ):
-    
     """
-    Compute the squares of the invariant masses for 
+    Compute the squares of the invariant masses for
     two particle systems.
     """
 
@@ -240,8 +204,7 @@ def calculate_invariant_mass_squared_of_two_particles(
     )
 
     sum_of_four_momenta_dataframe = (
-        particle_one_four_momentum_dataframe 
-        + particle_two_four_momentum_dataframe
+        particle_one_four_momentum_dataframe + particle_two_four_momentum_dataframe
     )
 
     sum_of_three_momenta_dataframe = convert_to_three_momentum_dataframe(
@@ -253,38 +216,35 @@ def calculate_invariant_mass_squared_of_two_particles(
     )
 
     invariant_mass_squared_dataframe = (
-        sum_of_four_momenta_dataframe["E"]**2 
+        sum_of_four_momenta_dataframe["E"] ** 2
         - sum_of_three_momenta_magnitude_squared_dataframe
     )
-    
+
     return invariant_mass_squared_dataframe
 
 
 def three_velocity_from_four_momentum_dataframe(four_momentum_dataframe):
-
     """
-    Compute a three-velocity dataframe 
+    Compute a three-velocity dataframe
     from a four-momentum dataframe.
     """
 
     four_momentum_dataframe = convert_to_four_momentum_dataframe(
         four_momentum_dataframe
     )
-    
+
     three_momentum_dataframe = convert_to_three_momentum_dataframe(
         four_momentum_dataframe[["px", "py", "pz"]]
     )
 
     three_velocity_dataframe = convert_to_three_velocity_dataframe(
-        three_momentum_dataframe
-        .multiply(1 / four_momentum_dataframe["E"], axis=0)
+        three_momentum_dataframe.multiply(1 / four_momentum_dataframe["E"], axis=0)
     )
 
     return three_velocity_dataframe
 
 
 def calculate_lorentz_factor_series(three_velocity_dataframe):
-
     """
     Compute a series of Lorentz factors.
     """
@@ -301,7 +261,6 @@ def calculate_lorentz_factor_series(three_velocity_dataframe):
 
 
 def compute_lorentz_boost_matrix_dataframe(three_velocity_dataframe):
-
     """
     Compute a dataframe of Lorentz boost matrices.
     """
@@ -337,20 +296,16 @@ def compute_lorentz_boost_matrix_dataframe(three_velocity_dataframe):
 
     boost_matrix_dataframe["b00"] = lorentz_factor_series
     boost_matrix_dataframe["b01"] = (
-        -lorentz_factor_series 
-        * three_velocity_dataframe["vx"]
+        -lorentz_factor_series * three_velocity_dataframe["vx"]
     )
     boost_matrix_dataframe["b02"] = (
-        -lorentz_factor_series 
-        * three_velocity_dataframe["vy"]
+        -lorentz_factor_series * three_velocity_dataframe["vy"]
     )
     boost_matrix_dataframe["b03"] = (
-        -lorentz_factor_series 
-        * three_velocity_dataframe["vz"]
+        -lorentz_factor_series * three_velocity_dataframe["vz"]
     )
     boost_matrix_dataframe["b10"] = (
-        -lorentz_factor_series 
-        * three_velocity_dataframe["vx"]
+        -lorentz_factor_series * three_velocity_dataframe["vx"]
     )
     boost_matrix_dataframe["b11"] = (
         1
@@ -371,8 +326,7 @@ def compute_lorentz_boost_matrix_dataframe(three_velocity_dataframe):
         / three_velocity_magnitude_series**2
     )
     boost_matrix_dataframe["b20"] = (
-        -lorentz_factor_series 
-        * three_velocity_dataframe["vy"]
+        -lorentz_factor_series * three_velocity_dataframe["vy"]
     )
     boost_matrix_dataframe["b21"] = (
         (lorentz_factor_series - 1)
@@ -393,8 +347,7 @@ def compute_lorentz_boost_matrix_dataframe(three_velocity_dataframe):
         / three_velocity_magnitude_series**2
     )
     boost_matrix_dataframe["b30"] = (
-        -lorentz_factor_series * 
-        three_velocity_dataframe["vz"]
+        -lorentz_factor_series * three_velocity_dataframe["vz"]
     )
     boost_matrix_dataframe["b31"] = (
         (lorentz_factor_series - 1)
@@ -419,16 +372,13 @@ def compute_lorentz_boost_matrix_dataframe(three_velocity_dataframe):
 
 
 def boost(reference_four_momentum_dataframe, four_vector_dataframe):
-
     """
-    Lorentz boost a dataframe of four-vectors 
+    Lorentz boost a dataframe of four-vectors
     to a reference four momentum dataframe.
     """
 
-    reference_three_velocity_dataframe = (
-        three_velocity_from_four_momentum_dataframe(
-            reference_four_momentum_dataframe
-        )
+    reference_three_velocity_dataframe = three_velocity_from_four_momentum_dataframe(
+        reference_four_momentum_dataframe
     )
 
     boost_matrix_dataframe = compute_lorentz_boost_matrix_dataframe(
@@ -443,13 +393,12 @@ def boost(reference_four_momentum_dataframe, four_vector_dataframe):
 
 
 def calculate_cosine_theta_lepton(
-    positive_lepton_four_momentum_dataframe, 
-    negative_lepton_four_momentum_dataframe, 
-    B_meson_four_momentum_dataframe
+    positive_lepton_four_momentum_dataframe,
+    negative_lepton_four_momentum_dataframe,
+    B_meson_four_momentum_dataframe,
 ):
-    
     """
-    Find the cosine of the lepton helicity angle 
+    Find the cosine of the lepton helicity angle
     for B -> K* ell+ ell-. Return a pandas series.
     """
 
@@ -464,42 +413,45 @@ def calculate_cosine_theta_lepton(
     )
 
     dilepton_four_momentum_dataframe = (
-        positive_lepton_four_momentum_dataframe + 
-        negative_lepton_four_momentum_dataframe
+        positive_lepton_four_momentum_dataframe
+        + negative_lepton_four_momentum_dataframe
     )
 
     positive_lepton_four_momentum_in_dilepton_frame_dataframe = boost(
-        reference_four_momentum_dataframe=dilepton_four_momentum_dataframe, 
-        four_vector_dataframe=positive_lepton_four_momentum_dataframe
+        reference_four_momentum_dataframe=dilepton_four_momentum_dataframe,
+        four_vector_dataframe=positive_lepton_four_momentum_dataframe,
     )
-    positive_lepton_three_momentum_in_dilepton_frame_dataframe = convert_to_three_momentum_dataframe(
-        positive_lepton_four_momentum_in_dilepton_frame_dataframe[["px", "py", "pz"]]
+    positive_lepton_three_momentum_in_dilepton_frame_dataframe = (
+        convert_to_three_momentum_dataframe(
+            positive_lepton_four_momentum_in_dilepton_frame_dataframe[
+                ["px", "py", "pz"]
+            ]
+        )
     )
 
     dilepton_four_momentum_in_B_frame_dataframe = boost(
-        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-        four_vector_dataframe=dilepton_four_momentum_dataframe
+        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+        four_vector_dataframe=dilepton_four_momentum_dataframe,
     )
     dilepton_three_momentum_in_B_frame_dataframe = convert_to_three_momentum_dataframe(
         dilepton_four_momentum_in_B_frame_dataframe[["px", "py", "pz"]]
     )
 
     cosine_theta_ell_series = cosine_angle(
-        vector_dataframe_1=dilepton_three_momentum_in_B_frame_dataframe, 
-        vector_dataframe_2=positive_lepton_three_momentum_in_dilepton_frame_dataframe
+        vector_dataframe_1=dilepton_three_momentum_in_B_frame_dataframe,
+        vector_dataframe_2=positive_lepton_three_momentum_in_dilepton_frame_dataframe,
     )
 
     return cosine_theta_ell_series
 
 
 def calculate_cosine_theta_K(
-    K_four_momentum_dataframe, 
-    K_star_four_momentum_dataframe, 
-    B_meson_four_momentum_dataframe
+    K_four_momentum_dataframe,
+    K_star_four_momentum_dataframe,
+    B_meson_four_momentum_dataframe,
 ):
-    
     """
-    Find the cosine of the K* helicity 
+    Find the cosine of the K* helicity
     angle for B -> K* ell+ ell-.
     """
 
@@ -514,38 +466,37 @@ def calculate_cosine_theta_K(
     )
 
     K_four_momentum_in_K_star_frame_dataframe = boost(
-        reference_four_momentum_dataframe=K_star_four_momentum_dataframe, 
-        four_vector_dataframe=K_four_momentum_dataframe
+        reference_four_momentum_dataframe=K_star_four_momentum_dataframe,
+        four_vector_dataframe=K_four_momentum_dataframe,
     )
     K_three_momentum_in_K_star_frame_dataframe = convert_to_three_momentum_dataframe(
         K_four_momentum_in_K_star_frame_dataframe[["px", "py", "pz"]]
     )
 
     K_star_four_momentum_in_B_frame_dataframe = boost(
-        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-        four_vector_dataframe=K_star_four_momentum_dataframe
+        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+        four_vector_dataframe=K_star_four_momentum_dataframe,
     )
     K_star_three_momentum_in_B_frame_dataframe = convert_to_three_momentum_dataframe(
         K_star_four_momentum_in_B_frame_dataframe[["px", "py", "pz"]]
     )
 
     cosine_theta_K_series = cosine_angle(
-        vector_dataframe_1=K_star_three_momentum_in_B_frame_dataframe, 
-        vector_dataframe_2=K_three_momentum_in_K_star_frame_dataframe
+        vector_dataframe_1=K_star_three_momentum_in_B_frame_dataframe,
+        vector_dataframe_2=K_three_momentum_in_K_star_frame_dataframe,
     )
 
     return cosine_theta_K_series
 
 
 def calculate_unit_normal_vector_to_K_star_K_plane(
-    B_meson_four_momentum_dataframe, 
-    K_star_four_momentum_dataframe, 
-    K_four_momentum_dataframe
+    B_meson_four_momentum_dataframe,
+    K_star_four_momentum_dataframe,
+    K_four_momentum_dataframe,
 ):
-    
     """
-    Find the unit normal to the plane made 
-    by the direction vectors of the K* and K 
+    Find the unit normal to the plane made
+    by the direction vectors of the K* and K
     in B -> K* ell+ ell-.
     """
 
@@ -560,35 +511,34 @@ def calculate_unit_normal_vector_to_K_star_K_plane(
     )
 
     K_four_momentum_in_K_star_frame_dataframe = boost(
-        reference_four_momentum_dataframe=K_star_four_momentum_dataframe, 
-        four_vector_dataframe=K_four_momentum_dataframe
+        reference_four_momentum_dataframe=K_star_four_momentum_dataframe,
+        four_vector_dataframe=K_four_momentum_dataframe,
     )
     K_three_momentum_in_K_star_frame_dataframe = convert_to_three_momentum_dataframe(
         K_four_momentum_in_K_star_frame_dataframe[["px", "py", "pz"]]
     )
 
     K_star_four_momentum_in_B_frame_dataframe = boost(
-        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-        four_vector_dataframe=K_star_four_momentum_dataframe
+        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+        four_vector_dataframe=K_star_four_momentum_dataframe,
     )
     K_star_three_momentum_in_B_frame_dataframe = convert_to_three_momentum_dataframe(
         K_star_four_momentum_in_B_frame_dataframe[["px", "py", "pz"]]
     )
 
     unit_normal_vector_to_K_star_K_plane_dataframe = unit_normal(
-        three_vector_dataframe_1=K_three_momentum_in_K_star_frame_dataframe, 
-        three_vector_dataframe_2=K_star_three_momentum_in_B_frame_dataframe
+        three_vector_dataframe_1=K_three_momentum_in_K_star_frame_dataframe,
+        three_vector_dataframe_2=K_star_three_momentum_in_B_frame_dataframe,
     )
 
     return unit_normal_vector_to_K_star_K_plane_dataframe
 
 
 def calculate_unit_normal_vector_to_dilepton_positive_lepton_plane(
-    B_meson_four_momentum_dataframe, 
-    positive_lepton_four_momentum_dataframe, 
-    negative_lepton_four_momentum_dataframe
+    B_meson_four_momentum_dataframe,
+    positive_lepton_four_momentum_dataframe,
+    negative_lepton_four_momentum_dataframe,
 ):
-    
     """
     Find the unit normal to the plane made by
     the direction vectors of the dilepton system and
@@ -606,29 +556,33 @@ def calculate_unit_normal_vector_to_dilepton_positive_lepton_plane(
     )
 
     dilepton_four_momentum_dataframe = (
-        positive_lepton_four_momentum_dataframe 
+        positive_lepton_four_momentum_dataframe
         + negative_lepton_four_momentum_dataframe
     )
 
     positive_lepton_four_momentum_in_dilepton_frame_dataframe = boost(
-        reference_four_momentum_dataframe=dilepton_four_momentum_dataframe, 
-        four_vector_dataframe=positive_lepton_four_momentum_dataframe
+        reference_four_momentum_dataframe=dilepton_four_momentum_dataframe,
+        four_vector_dataframe=positive_lepton_four_momentum_dataframe,
     )
-    positive_lepton_three_momentum_in_dilepton_frame_dataframe = convert_to_three_momentum_dataframe(
-        positive_lepton_four_momentum_in_dilepton_frame_dataframe[["px", "py", "pz"]]
+    positive_lepton_three_momentum_in_dilepton_frame_dataframe = (
+        convert_to_three_momentum_dataframe(
+            positive_lepton_four_momentum_in_dilepton_frame_dataframe[
+                ["px", "py", "pz"]
+            ]
+        )
     )
 
     dilepton_four_momentum_in_B_frame_dataframe = boost(
-        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-        four_vector_dataframe=dilepton_four_momentum_dataframe
+        reference_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+        four_vector_dataframe=dilepton_four_momentum_dataframe,
     )
     dilepton_three_momentum_in_B_frame_dataframe = convert_to_three_momentum_dataframe(
         dilepton_four_momentum_in_B_frame_dataframe[["px", "py", "pz"]]
     )
 
     result = unit_normal(
-        three_vector_dataframe_1=positive_lepton_three_momentum_in_dilepton_frame_dataframe, 
-        three_vector_dataframe_2=dilepton_three_momentum_in_B_frame_dataframe
+        three_vector_dataframe_1=positive_lepton_three_momentum_in_dilepton_frame_dataframe,
+        three_vector_dataframe_2=dilepton_three_momentum_in_B_frame_dataframe,
     )
 
     return result
@@ -639,31 +593,28 @@ def calculate_cosine_chi(
     K_four_momentum_dataframe,
     K_star_four_momentum_dataframe,
     positive_lepton_four_momentum_dataframe,
-    negative_lepton_four_momentum_dataframe
+    negative_lepton_four_momentum_dataframe,
 ):
-    
     """
-    Find the cosine of the decay angle chi 
+    Find the cosine of the decay angle chi
     in B -> K* ell+ ell-.
 
-    Chi is the angle between the K* K decay plane 
+    Chi is the angle between the K* K decay plane
     and the dilepton ell+ decay plane.
     """
 
     unit_normal_vector_to_K_star_K_plane_dataframe = (
         calculate_unit_normal_vector_to_K_star_K_plane(
-            B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-            K_star_four_momentum_dataframe=K_star_four_momentum_dataframe, 
-            K_four_momentum_dataframe=K_four_momentum_dataframe
+            B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+            K_star_four_momentum_dataframe=K_star_four_momentum_dataframe,
+            K_four_momentum_dataframe=K_four_momentum_dataframe,
         )
     )
-    
-    unit_normal_vector_to_dilepton_positive_lepton_plane_dataframe = (
-        calculate_unit_normal_vector_to_dilepton_positive_lepton_plane(
-            B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-            positive_lepton_four_momentum_dataframe=positive_lepton_four_momentum_dataframe, 
-            negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe
-        )
+
+    unit_normal_vector_to_dilepton_positive_lepton_plane_dataframe = calculate_unit_normal_vector_to_dilepton_positive_lepton_plane(
+        B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+        positive_lepton_four_momentum_dataframe=positive_lepton_four_momentum_dataframe,
+        negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe,
     )
 
     cosine_chi_series = dot_product(
@@ -681,11 +632,10 @@ def calculate_chi(
     positive_lepton_four_momentum_dataframe,
     negative_lepton_four_momentum_dataframe,
 ):
-    
     """
     Find the decay angle chi in B -> K* ell+ ell-.
 
-    Chi is the angle between the K* K decay plane 
+    Chi is the angle between the K* K decay plane
     and the dilepton ell+ decay plane.
     It ranges from 0 to 2*pi.
     """
@@ -695,51 +645,51 @@ def calculate_chi(
         K_star_four_momentum_dataframe,
         K_four_momentum_dataframe,
         positive_lepton_four_momentum_dataframe,
-        negative_lepton_four_momentum_dataframe
+        negative_lepton_four_momentum_dataframe,
     ):
 
         unit_normal_vector_to_K_star_K_plane_dataframe = (
             calculate_unit_normal_vector_to_K_star_K_plane(
-                B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-                K_star_four_momentum_dataframe=K_star_four_momentum_dataframe, 
-                K_four_momentum_dataframe=K_four_momentum_dataframe
+                B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+                K_star_four_momentum_dataframe=K_star_four_momentum_dataframe,
+                K_four_momentum_dataframe=K_four_momentum_dataframe,
             )
         )
 
-        unit_normal_vector_to_dilepton_positive_lepton_plane_dataframe = (
-            calculate_unit_normal_vector_to_dilepton_positive_lepton_plane(
-                B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-                positive_lepton_four_momentum_dataframe=positive_lepton_four_momentum_dataframe, 
-                negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe
-            )
+        unit_normal_vector_to_dilepton_positive_lepton_plane_dataframe = calculate_unit_normal_vector_to_dilepton_positive_lepton_plane(
+            B_meson_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+            positive_lepton_four_momentum_dataframe=positive_lepton_four_momentum_dataframe,
+            negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe,
         )
 
         normal_vector_cross_product_dataframe = cross_product_3d(
             three_vector_dataframe_1=unit_normal_vector_to_dilepton_positive_lepton_plane_dataframe,
-            three_vector_dataframe_2=unit_normal_vector_to_K_star_K_plane_dataframe
+            three_vector_dataframe_2=unit_normal_vector_to_K_star_K_plane_dataframe,
         )
 
         K_star_four_momentum_dataframe = convert_to_four_momentum_dataframe(
             K_star_four_momentum_dataframe
         )
         K_star_four_momentum_in_B_frame_dataframe = boost(
-            reference_four_momentum_dataframe=B_meson_four_momentum_dataframe, 
-            four_vector_dataframe=K_star_four_momentum_dataframe
+            reference_four_momentum_dataframe=B_meson_four_momentum_dataframe,
+            four_vector_dataframe=K_star_four_momentum_dataframe,
         )
-        K_star_three_momentum_in_B_frame_dataframe = convert_to_three_momentum_dataframe(
-            K_star_four_momentum_in_B_frame_dataframe[["px", "py", "pz"]]
+        K_star_three_momentum_in_B_frame_dataframe = (
+            convert_to_three_momentum_dataframe(
+                K_star_four_momentum_in_B_frame_dataframe[["px", "py", "pz"]]
+            )
         )
 
         dot_product_of_cross_product_and_K_star_three_momentum_series = dot_product(
-            vector_dataframe_1=normal_vector_cross_product_dataframe, 
-            vector_dataframe_2=K_star_three_momentum_in_B_frame_dataframe
+            vector_dataframe_1=normal_vector_cross_product_dataframe,
+            vector_dataframe_2=K_star_three_momentum_in_B_frame_dataframe,
         )
 
-        sign = numpy.sign(dot_product_of_cross_product_and_K_star_three_momentum_series) 
+        sign = numpy.sign(dot_product_of_cross_product_and_K_star_three_momentum_series)
 
         return sign
-    
-    def convert_to_positive_angles(chi): 
+
+    def convert_to_positive_angles(chi):
 
         return chi.where(chi > 0, chi + 2 * numpy.pi)
 
@@ -748,7 +698,7 @@ def calculate_chi(
         K_four_momentum_dataframe=K_four_momentum_dataframe,
         K_star_four_momentum_dataframe=K_star_four_momentum_dataframe,
         positive_lepton_four_momentum_dataframe=positive_lepton_four_momentum_dataframe,
-        negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe
+        negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe,
     )
 
     sign_of_chi = calculate_sign_of_chi(
@@ -756,7 +706,7 @@ def calculate_chi(
         K_star_four_momentum_dataframe=K_star_four_momentum_dataframe,
         K_four_momentum_dataframe=K_four_momentum_dataframe,
         positive_lepton_four_momentum_dataframe=positive_lepton_four_momentum_dataframe,
-        negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe
+        negative_lepton_four_momentum_dataframe=negative_lepton_four_momentum_dataframe,
     )
 
     chi_series = sign_of_chi * numpy.arccos(cosine_chi_series)
@@ -767,12 +717,10 @@ def calculate_chi(
 
 
 def calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
-    K_four_momentum_dataframe, 
-    pi_four_momentum_dataframe
+    K_four_momentum_dataframe, pi_four_momentum_dataframe
 ):
-
     """
-    Calcualate the difference between the 
+    Calcualate the difference between the
     invariant mass of the K pi system
     and the K*'s invariant mass (PDG value).
     """
@@ -781,22 +729,23 @@ def calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
 
     invariant_mass_of_K_pi_system_dataframe = numpy.sqrt(
         calculate_invariant_mass_squared_of_two_particles(
-            particle_one_four_momentum_dataframe=K_four_momentum_dataframe, 
-            particle_two_four_momentum_dataframe=pi_four_momentum_dataframe
+            particle_one_four_momentum_dataframe=K_four_momentum_dataframe,
+            particle_two_four_momentum_dataframe=pi_four_momentum_dataframe,
         )
     )
 
-    difference_series = invariant_mass_of_K_pi_system_dataframe - invariant_mass_of_K_star
-    
+    difference_series = (
+        invariant_mass_of_K_pi_system_dataframe - invariant_mass_of_K_star
+    )
+
     return difference_series
 
 
 def _calculate_B_to_K_star_l_l_features(dataframe, lepton_flavor):
-
     """
     Calculate detecor and generator level variables of B -> K* l+ l- decays.
 
-    Variables: 
+    Variables:
     q^2, cosine theta l, cosine theta K, cosine chi, chi, and the
     difference between K pi invariant mass and K* PDG invariant mass
     """
@@ -809,17 +758,53 @@ def _calculate_B_to_K_star_l_l_features(dataframe, lepton_flavor):
     B_meson_generated_four_momentum_dataframe = convert_to_four_momentum_dataframe(
         dataframe[["mcE", "mcPX", "mcPY", "mcPZ"]]
     )
-    positive_lepton_measured_four_momentum_dataframe = convert_to_four_momentum_dataframe(
-        dataframe[[f"{lepton_flavor}_p_E", f"{lepton_flavor}_p_px", f"{lepton_flavor}_p_py", f"{lepton_flavor}_p_pz"]]
+    positive_lepton_measured_four_momentum_dataframe = (
+        convert_to_four_momentum_dataframe(
+            dataframe[
+                [
+                    f"{lepton_flavor}_p_E",
+                    f"{lepton_flavor}_p_px",
+                    f"{lepton_flavor}_p_py",
+                    f"{lepton_flavor}_p_pz",
+                ]
+            ]
+        )
     )
-    positive_lepton_generated_four_momentum_dataframe = convert_to_four_momentum_dataframe(
-        dataframe[[f"{lepton_flavor}_p_mcE", f"{lepton_flavor}_p_mcPX", f"{lepton_flavor}_p_mcPY", f"{lepton_flavor}_p_mcPZ"]]
+    positive_lepton_generated_four_momentum_dataframe = (
+        convert_to_four_momentum_dataframe(
+            dataframe[
+                [
+                    f"{lepton_flavor}_p_mcE",
+                    f"{lepton_flavor}_p_mcPX",
+                    f"{lepton_flavor}_p_mcPY",
+                    f"{lepton_flavor}_p_mcPZ",
+                ]
+            ]
+        )
     )
-    negative_lepton_measured_four_momentum_dataframe = convert_to_four_momentum_dataframe(
-        dataframe[[f"{lepton_flavor}_m_E", f"{lepton_flavor}_m_px", f"{lepton_flavor}_m_py", f"{lepton_flavor}_m_pz"]]
+    negative_lepton_measured_four_momentum_dataframe = (
+        convert_to_four_momentum_dataframe(
+            dataframe[
+                [
+                    f"{lepton_flavor}_m_E",
+                    f"{lepton_flavor}_m_px",
+                    f"{lepton_flavor}_m_py",
+                    f"{lepton_flavor}_m_pz",
+                ]
+            ]
+        )
     )
-    negative_lepton_generated_four_momentum_dataframe = convert_to_four_momentum_dataframe(
-        dataframe[[f"{lepton_flavor}_m_mcE", f"{lepton_flavor}_m_mcPX", f"{lepton_flavor}_m_mcPY", f"{lepton_flavor}_m_mcPZ"]]
+    negative_lepton_generated_four_momentum_dataframe = (
+        convert_to_four_momentum_dataframe(
+            dataframe[
+                [
+                    f"{lepton_flavor}_m_mcE",
+                    f"{lepton_flavor}_m_mcPX",
+                    f"{lepton_flavor}_m_mcPY",
+                    f"{lepton_flavor}_m_mcPZ",
+                ]
+            ]
+        )
     )
     K_measured_four_momentum_dataframe = convert_to_four_momentum_dataframe(
         dataframe[["K_p_E", "K_p_px", "K_p_py", "K_p_pz"]]
@@ -843,32 +828,32 @@ def _calculate_B_to_K_star_l_l_features(dataframe, lepton_flavor):
     dataframe = dataframe.copy()
 
     dataframe["q_squared"] = calculate_invariant_mass_squared_of_two_particles(
-        particle_one_four_momentum_dataframe=positive_lepton_measured_four_momentum_dataframe, 
-        particle_two_four_momentum_dataframe=negative_lepton_measured_four_momentum_dataframe
+        particle_one_four_momentum_dataframe=positive_lepton_measured_four_momentum_dataframe,
+        particle_two_four_momentum_dataframe=negative_lepton_measured_four_momentum_dataframe,
     )
-    dataframe[f"q_squared_mc"] = calculate_invariant_mass_squared_of_two_particles(
-        particle_one_four_momentum_dataframe=positive_lepton_generated_four_momentum_dataframe, 
-        particle_two_four_momentum_dataframe=negative_lepton_generated_four_momentum_dataframe
+    dataframe["q_squared_mc"] = calculate_invariant_mass_squared_of_two_particles(
+        particle_one_four_momentum_dataframe=positive_lepton_generated_four_momentum_dataframe,
+        particle_two_four_momentum_dataframe=negative_lepton_generated_four_momentum_dataframe,
     )
     dataframe[f"cos_theta_{lepton_flavor}"] = calculate_cosine_theta_lepton(
-        positive_lepton_four_momentum_dataframe=positive_lepton_measured_four_momentum_dataframe, 
-        negative_lepton_four_momentum_dataframe=negative_lepton_measured_four_momentum_dataframe, 
-        B_meson_four_momentum_dataframe=B_meson_measured_four_momentum_dataframe
+        positive_lepton_four_momentum_dataframe=positive_lepton_measured_four_momentum_dataframe,
+        negative_lepton_four_momentum_dataframe=negative_lepton_measured_four_momentum_dataframe,
+        B_meson_four_momentum_dataframe=B_meson_measured_four_momentum_dataframe,
     )
     dataframe[f"cos_theta_{lepton_flavor}_mc"] = calculate_cosine_theta_lepton(
-        positive_lepton_four_momentum_dataframe=positive_lepton_generated_four_momentum_dataframe, 
-        negative_lepton_four_momentum_dataframe=negative_lepton_generated_four_momentum_dataframe, 
-        B_meson_four_momentum_dataframe=B_meson_generated_four_momentum_dataframe
+        positive_lepton_four_momentum_dataframe=positive_lepton_generated_four_momentum_dataframe,
+        negative_lepton_four_momentum_dataframe=negative_lepton_generated_four_momentum_dataframe,
+        B_meson_four_momentum_dataframe=B_meson_generated_four_momentum_dataframe,
     )
     dataframe["cos_theta_k"] = calculate_cosine_theta_K(
-        K_four_momentum_dataframe=K_measured_four_momentum_dataframe, 
-        K_star_four_momentum_dataframe=K_star_measured_four_momentum_dataframe, 
-        B_meson_four_momentum_dataframe=B_meson_measured_four_momentum_dataframe
+        K_four_momentum_dataframe=K_measured_four_momentum_dataframe,
+        K_star_four_momentum_dataframe=K_star_measured_four_momentum_dataframe,
+        B_meson_four_momentum_dataframe=B_meson_measured_four_momentum_dataframe,
     )
-    dataframe[f"cos_theta_K_mc"] = calculate_cosine_theta_K(
-        K_four_momentum_dataframe=K_generated_four_momentum_dataframe, 
-        K_star_four_momentum_dataframe=K_star_generated_four_momentum_dataframe, 
-        B_meson_four_momentum_dataframe=B_meson_generated_four_momentum_dataframe
+    dataframe["cos_theta_K_mc"] = calculate_cosine_theta_K(
+        K_four_momentum_dataframe=K_generated_four_momentum_dataframe,
+        K_star_four_momentum_dataframe=K_star_generated_four_momentum_dataframe,
+        B_meson_four_momentum_dataframe=B_meson_generated_four_momentum_dataframe,
     )
     dataframe["cos_chi"] = calculate_cosine_chi(
         B_meson_four_momentum_dataframe=B_meson_measured_four_momentum_dataframe,
@@ -891,138 +876,110 @@ def _calculate_B_to_K_star_l_l_features(dataframe, lepton_flavor):
         positive_lepton_four_momentum_dataframe=positive_lepton_measured_four_momentum_dataframe,
         negative_lepton_four_momentum_dataframe=negative_lepton_measured_four_momentum_dataframe,
     )
-    dataframe[f"chi_mc"] = calculate_chi(
+    dataframe["chi_mc"] = calculate_chi(
         B_meson_four_momentum_dataframe=B_meson_generated_four_momentum_dataframe,
         K_four_momentum_dataframe=K_generated_four_momentum_dataframe,
         K_star_four_momentum_dataframe=K_star_generated_four_momentum_dataframe,
         positive_lepton_four_momentum_dataframe=positive_lepton_generated_four_momentum_dataframe,
         negative_lepton_four_momentum_dataframe=negative_lepton_generated_four_momentum_dataframe,
     )
-    dataframe["inv_M_K_pi_shifted"] = calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
-        K_four_momentum_dataframe=K_measured_four_momentum_dataframe,
-        pi_four_momentum_dataframe=pi_measured_four_momentum_dataframe
+    dataframe["inv_M_K_pi_shifted"] = (
+        calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
+            K_four_momentum_dataframe=K_measured_four_momentum_dataframe,
+            pi_four_momentum_dataframe=pi_measured_four_momentum_dataframe,
+        )
     )
-    dataframe["inv_M_K_pi_shifted_mc"] = calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
-        K_four_momentum_dataframe=K_generated_four_momentum_dataframe,
-        pi_four_momentum_dataframe=pi_generated_four_momentum_dataframe
+    dataframe["inv_M_K_pi_shifted_mc"] = (
+        calculate_difference_between_invariant_masses_of_K_pi_system_and_K_star(
+            K_four_momentum_dataframe=K_generated_four_momentum_dataframe,
+            pi_four_momentum_dataframe=pi_generated_four_momentum_dataframe,
+        )
     )
 
     return dataframe
 
 
-
-
-
 def _read_pandas_parquets(
-    paths:list[Path],
-) -> DataFrame|Series:
-    
-    dfs = [
-        read_parquet(path) 
-        for path in paths
-    ]
+    paths: list[Path],
+) -> DataFrame | Series:
+
+    dfs = [read_parquet(path) for path in paths]
     return concat(dfs)
 
 
 def _open_simulated_data_root_file(
-    path:Path|str, 
-    unwanted_keys:list[str]=[
-        "persistent;1", 
-        "persistent;2"
-    ],
+    path: Path | str,
+    unwanted_keys: list[str] = ["persistent;1", "persistent;2"],
 ) -> DataFrame:
     """
     Open a simulated data root file as a pandas dataframe.
     Each tree will be labeled by a pandas multi-index.
     """
     with open(path) as file:
-        keys = [
-            key.split(";")[0] for key in file.keys() 
-            if key not in unwanted_keys
-        ]
-        tree_dataframes = [
-            file[key].arrays(library="pd") 
-            for key in keys
-        ]
+        keys = [key.split(";")[0] for key in file.keys() if key not in unwanted_keys]
+        tree_dataframes = [file[key].arrays(library="pd") for key in keys]
     dataframe = concat(
-        tree_dataframes, 
+        tree_dataframes,
         keys=keys,
-        names=["sim_type",]
+        names=[
+            "sim_type",
+        ],
     )
     return dataframe
 
 
 def _root_to_parquet(
-    root_file_path:Path|str,
+    root_file_path: Path | str,
 ) -> None:
-    
+
     root_file_path = Path(root_file_path)
     if not root_file_path.is_file():
-        raise FileNotFoundError(
-            f"File not found: {root_file_path}"
-        )
-    dataframe = _open_simulated_data_root_file(
-        root_file_path
-    )
-    #.drop(
+        raise FileNotFoundError(f"File not found: {root_file_path}")
+    dataframe = _open_simulated_data_root_file(root_file_path)
+    # .drop(
     #    columns="__eventType__"
-    #)
-    save_path = root_file_path.with_suffix(
-        ".parquet"
-    )
+    # )
+    save_path = root_file_path.with_suffix(".parquet")
     dataframe.to_parquet(save_path)
 
 
 def _root_files_to_parquet(
-    paths:list[Path],
-    lazy:bool=True,
+    paths: list[Path],
+    lazy: bool = True,
 ) -> None:
-    
+
     to_convert = (
-        paths if not lazy 
-        else [
-            path for path in paths
-            if not path.with_suffix(".parquet").is_file()
-        ]
+        paths
+        if not lazy
+        else [path for path in paths if not path.with_suffix(".parquet").is_file()]
     )
     for path in to_convert:
         _root_to_parquet(path)
 
 
 def _combine_files(
-    dirs:list[Path],
-    out_file_path:Path|str,
-    index_names:list[str]=[
-        "trial_num", 
-        "lepton_flavor", 
+    dirs: list[Path],
+    out_file_path: Path | str,
+    index_names: list[str] = [
+        "trial_num",
+        "lepton_flavor",
         "split",
-    ]
+    ],
 ) -> None:
     for dir_ in dirs:
         if not dir_.is_dir():
             raise ValueError(
-                "Input paths must be directories."
-                f" {dir_} is not a directory."
+                "Input paths must be directories." f" {dir_} is not a directory."
             )
-        nested_data_file_paths = (
-            list(dir_.glob("*.root")) + 
-            list(dir_.glob("*.parquet"))
+        nested_data_file_paths = list(dir_.glob("*.root")) + list(
+            dir_.glob("*.parquet")
         )
         if not nested_data_file_paths:
-            raise ValueError(
-                f"No data file in directory: {dir_}"
-            )
+            raise ValueError(f"No data file in directory: {dir_}")
         if not dir_.joinpath("metadata.json").is_file():
-            raise ValueError(
-                f"No metadata file in directory: {dir_}"
-            )
-    
-    for dir_ in (
-        pbar := tqdm(
-            dirs, 
-            desc="Converting"
-        )
-    ):
+            raise ValueError(f"No metadata file in directory: {dir_}")
+
+    for dir_ in (pbar := tqdm(dirs, desc="Converting")):
         pbar.set_postfix_str(dir_.name)
         root_file_paths = list(dir_.glob("*.root"))
         _root_files_to_parquet(
@@ -1030,56 +987,28 @@ def _combine_files(
             lazy=True,
         )
 
-    metadata_file_paths = [
-        dir_.joinpath("metadata.json") 
-        for dir_ in dirs
-    ]
-    metadatas = [
-        load_json(path) 
-        for path in metadata_file_paths
-    ]
-    metadatas = [
-        flatten_dict(metadata)
-        for metadata in metadatas
-    ]
-    nested_data_file_paths = [
-        list(dir_.glob("*.parquet"))
-        for dir_ in dirs
-    ]
-    dataframes = [
-        _read_pandas_parquets(paths)
-        for paths in nested_data_file_paths
-    ]
+    metadata_file_paths = [dir_.joinpath("metadata.json") for dir_ in dirs]
+    metadatas = [load_json(path) for path in metadata_file_paths]
+    metadatas = [flatten_dict(metadata) for metadata in metadatas]
+    nested_data_file_paths = [list(dir_.glob("*.parquet")) for dir_ in dirs]
+    dataframes = [_read_pandas_parquets(paths) for paths in nested_data_file_paths]
     index = [
-        {
-            name: metadata.pop(name) 
-            for name in index_names
-        } 
-        for metadata in metadatas
+        {name: metadata.pop(name) for name in index_names} for metadata in metadatas
     ]
-    dataframes = [
-        df.assign(**metadata) 
-        for df, metadata in zip(
-            dataframes, 
-            metadatas
-        )
-    ]
-    keys = [
-        tuple(i.values())
-        for i in index
-    ]
+    dataframes = [df.assign(**metadata) for df, metadata in zip(dataframes, metadatas)]
+    keys = [tuple(i.values()) for i in index]
     data = concat(
-        dataframes, 
+        dataframes,
         keys=keys,
-        names=index_names, 
+        names=index_names,
     )
-    data = data.sort_index() # check this for memory usage
+    data = data.sort_index()  # check this for memory usage
     data.to_parquet(out_file_path)
 
 
 def prep_data(
-    in_data_dir:Path,
-    out_file_path:Path,      
+    in_data_dir: Path,
+    out_file_path: Path,
 ) -> None:
     for p in in_data_dir.rglob("._*"):
         p.unlink()

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from torch import Tensor, cat
 from pandas import DataFrame, Series, read_parquet
 
-from .util import tensor_from_pandas
+from .util import tensor_from_pandas, group
 
 
 @dataclass
@@ -16,6 +16,11 @@ class Dataset:
         if self.labels is not None:
             assert len(self.features) == len(self.labels)
         return len(self.features)
+
+    def copy(self):
+        features = self.features.detach().clone()
+        labels = self.labels.detach().clone()
+        return Dataset(features=features, labels=labels)
 
 
 def concat_datasets(dsets: list[Dataset]) -> Dataset:
@@ -104,3 +109,14 @@ def dataset_from_dataframe_parquet(
     )
 
     return dset
+
+
+def group_dataset_by_label(dataset: Dataset):
+    assert dataset.labels is not None
+    out = dataset.copy()
+    out.features = group(dataset.features, by=dataset.labels)
+    out.labels = group(dataset.labels, by=dataset.labels)
+    out.labels = out.labels.unique(dim=1).squeeze()
+    assert out.labels.dim() == 1
+    assert len(out.features) == len(out.labels)
+    return out

@@ -1,7 +1,8 @@
 from pathlib import Path
 
+
 from numpy.typing import ArrayLike
-from numpy import arange, log10
+from numpy import arange, log10, max, argmax
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.pyplot import (
@@ -35,7 +36,13 @@ def save_fig_and_close(
     close(fig)
 
 
-def plot_losses_on_ax(
+def plot_to_file(path, plot_fn, **kwargs):
+    fig, ax = subplots()
+    plot_fn(ax=ax, **kwargs)
+    save_fig_and_close(fig, path)
+
+
+def plot_losses(
     ax: Axes,
     train_losses: ArrayLike,
     eval_losses: ArrayLike | None = None,
@@ -70,26 +77,37 @@ def plot_losses_on_ax(
     ax.set_xlabel("Epoch", fontsize=15)
 
 
-def plot_losses_to_file(
-    path: Path | str,
-    train_losses: ArrayLike,
-    eval_losses: ArrayLike | None = None,
-    yscale: str = "linear",
-    scatter_or_plot: str = "scatter",
-    compute_log: bool = False,
-    **kwargs,
+def plot_predictions_dataset(
+    ax: Axes,
+    parameters: ArrayLike,
+    log_probabilities: ArrayLike,
+    true_value: float,
+    color: str,
 ):
+    ax.plot(parameters, log_probabilities, color=color)
+    ax.axvline(true_value, color=color, linestyle="--", zorder=-100)
+    mle_y = max(log_probabilities)
+    mle_x = parameters[argmax(log_probabilities)]
+    ax.scatter(mle_x, mle_y, color=color, s=25, zorder=100)
 
-    fig, ax = subplots()
+    ax.set_ylabel(r"$\log p(\delta C_9 \;|\; \textrm{data}) + C$", fontsize=15)
+    ax.set_xlabel(r"$\delta C_9$", fontsize=15)
 
-    plot_losses_on_ax(
-        ax,
-        train_losses,
-        eval_losses=eval_losses,
-        yscale=yscale,
-        scatter_or_plot=scatter_or_plot,
-        compute_log=compute_log,
-        **kwargs,
-    )
 
-    save_fig_and_close(fig, path)
+def plot_predictions_multiple_datasets(
+    ax: Axes,
+    parameters: ArrayLike,
+    log_probabilities: list[ArrayLike],
+    true_values: list[float],
+    colors: list[str],
+):
+    assert len(log_probabilities) == len(true_values) == len(colors)
+
+    for log_probs, true_value, color in zip(log_probabilities, true_values, colors):
+        plot_predictions_dataset(
+            ax=ax,
+            parameters=parameters,
+            log_probabilities=log_probs,
+            true_value=true_value,
+            color=color,
+        )

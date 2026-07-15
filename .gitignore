@@ -1,15 +1,6 @@
-*
-!*/
-
-
-# ignore these directories
 __pycache__
 .env
-.venv
-
-# track these file types
-!*.py
-!*.gitignore
-!pyproject.toml
-!readme.md
-!requirements.txt
+.DS_Store
+*.root
+*.pkl
+*.parquet

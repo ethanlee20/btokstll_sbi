@@ -1,7 +1,7 @@
 from typing import Any
 
 from pandas import DataFrame, Series, Index
-from torch import cuda, device, Tensor, randperm, from_numpy, stack
+from torch import cuda, device, Tensor, randperm, from_numpy, stack, all
 from torch.nn import Module
 
 
@@ -22,8 +22,25 @@ def all_same(a: list):
     return False
 
 
-def shuffle_pandas(a: DataFrame | Series) -> DataFrame:
+def shuffle_pandas(
+    a: DataFrame | Series, keep_index: bool = False
+) -> DataFrame | Series:
+    """
+    Shuffle a pandas series or dataframe.
+
+    Parameters
+    ----------
+    a : Dataframe or Series
+    keep_index : bool
+        False shuffles the index with the data. True uses the original index.
+
+    Returns
+    -------
+    Shuffled pandas dataframe or series
+    """
     a_shuf = a.sample(frac=1, replace=False)
+    if keep_index:
+        a_shuf.index = a.index
     return a_shuf
 
 
