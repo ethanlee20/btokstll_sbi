@@ -3,13 +3,55 @@ from pathlib import Path
 from torch import ones, zeros, float32
 from pandas import read_parquet
 
-from .util import shuffle_pandas
+from .physics import calc_vars
+from .util import shuffle_pandas, read_json
 from .dataset import (
     concat_datasets,
     dataset_from_dataframe,
     dataset_from_dataframe_parquet,
     group_dataset_by_label,
 )
+
+
+def open_root_data_file(path: Path | str) -> DataFrame:
+    """
+    Open a simulated data root file as a pandas dataframe.
+    Each tree will be labeled by a pandas multi-index.
+    """
+    unwanted_keys = ["persistent;1", "persistent;2"]
+    with open(path) as file:
+        keys = [key.split(";")[0] for key in file.keys() if key not in unwanted_keys]
+        dataframes = [file[key].arrays(library="pd") for key in keys]
+    out = concat(dataframes, keys=keys, names=["sim_type"])
+    return out
+
+
+def calc_vars_root_file(path: Path|str) -> DataFrame:
+    """
+    Save the output DataFrame to a file.
+    """
+    dataframe = open_root_data_file(path)
+    dataframe = calc_vars(dataframe)
+    metadata_path = Path(path).with_name("metadata.json")
+    parameters = read_json(metadata_path)["parameter_values"]
+    out = dataframe.assign(**parameters)
+    return out
+
+
+def prep_root_file(path: Path|str):
+    dataframe = calc_vars_root_file(path)
+    columns = ["q_sq", "q_sq_mc", "cos_theta_lepton", "cos_theta_lepton_mc", "cos_theta_k", "cos_theta_k_mc", "chi", "chi_mc", "dC_7", "dC_9", "dC_10"]
+    save_path = Path(path).with_suffix(".parquet")
+    dataframe[columns].to_parquet(save_path)
+    return save_path
+
+
+def prep_data_dir(dir_:str|Path):
+    root_file_paths = Path(dir_).rglob("*.root")
+    parquet_file_paths = [prep_root_file(path) for path in root_file_paths]
+    dataframes = [read_parquet(path) for path in parquet_file_paths]
+    out = concat(dataframes)
+    out.to_parquet(Path(dir_).joinpath("combo.parquet"))
 
 
 def prep_train_data(

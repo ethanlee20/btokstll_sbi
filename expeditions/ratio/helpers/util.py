@@ -5,6 +5,13 @@ from torch import cuda, device, Tensor, randperm, from_numpy, stack, all
 from torch.nn import Module
 
 
+def read_json(
+    path:Path|str
+) -> dict:
+    with open(path) as file:
+        return load(file)
+
+
 def are_instance(
     objs: Any,
     classinfo: Any,
