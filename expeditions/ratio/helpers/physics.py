@@ -1,22 +1,20 @@
-from pathlib import Path
-
-from numpy import sqrt, zeros, sign, pi, arccos
+from numpy import sqrt, zeros, sign, pi, arccos, ndarray
 from pandas import DataFrame, Series
 
 
-def error_on_length_mismatch(a: DataFrame|Series, b: DataFrame|Series):
+def error_on_length_mismatch(a: DataFrame | Series, b: DataFrame | Series):
     length_a = a.shape[0]
     length_b = b.shape[0]
     if not (length_a == length_b):
         raise ValueError(f"Lengths must be equal. Got {length_a} and {length_b}.")
 
 
-def error_on_index_mismatch(a:DataFrame|Series, b:Dataframe|Series):
+def error_on_index_mismatch(a: DataFrame | Series, b: DataFrame | Series):
     if not (a.index.equals(b.index)):
         raise ValueError("Indices must be equal.")
 
 
-def square_matrix_transform(matrix:DataFrame, vector:DataFrame) -> DataFrame:
+def square_matrix_transform(matrix: DataFrame, vector: DataFrame) -> DataFrame:
     """
     Multiply a dataframe of vectors by a dataframe of square matrices.
     """
@@ -37,15 +35,12 @@ def square_matrix_transform(matrix:DataFrame, vector:DataFrame) -> DataFrame:
 
     for i in range(vector_length):
         for j in range(vector_length):
-            out.iloc[:, i] += (
-                matrix.iloc[:, vector_length * i + j]
-                * vector.iloc[:, j]
-            )
+            out.iloc[:, i] += matrix.iloc[:, vector_length * i + j] * vector.iloc[:, j]
 
     return out
 
 
-def dot_product(vector_1:DataFrame, vector_2:DataFrame) -> Series:
+def dot_product(vector_1: DataFrame, vector_2: DataFrame) -> Series:
     """
     Compute the dot products of two vector dataframes.
     """
@@ -64,10 +59,7 @@ def dot_product(vector_1:DataFrame, vector_2:DataFrame) -> Series:
     )
 
     for dimension in range(vector_length):
-        out += (
-            vector_1.iloc[:, dimension]
-            * vector_2.iloc[:, dimension]
-        )
+        out += vector_1.iloc[:, dimension] * vector_2.iloc[:, dimension]
 
     return out
 
@@ -90,7 +82,7 @@ def cosine_angle(vector_1: DataFrame, vector_2: DataFrame) -> Series:
     return out
 
 
-def cross_product_3d(three_vector_1:DataFrame, three_vector_2:DataFrame) -> DataFrame:
+def cross_product_3d(three_vector_1: DataFrame, three_vector_2: DataFrame) -> DataFrame:
     """
     Find the cross product of vectors from two 3-dimensional vector dataframes.
     """
@@ -126,14 +118,12 @@ def cross_product_3d(three_vector_1:DataFrame, three_vector_2:DataFrame) -> Data
     return out
 
 
-def unit_normal(three_vector_1:DataFrame, three_vector_2:DataFrame) -> DataFrame:
+def unit_normal(three_vector_1: DataFrame, three_vector_2: DataFrame) -> DataFrame:
     """
     For planes specified by two three-vector dataframes, calculate the unit normal vectors.
     """
 
-    normal_vector = cross_product_3d(
-        three_vector_1, three_vector_2
-    )
+    normal_vector = cross_product_3d(three_vector_1, three_vector_2)
 
     unit_normal_vector = normal_vector.divide(
         vector_magnitude(normal_vector), axis="index"
@@ -142,7 +132,7 @@ def unit_normal(three_vector_1:DataFrame, three_vector_2:DataFrame) -> DataFrame
     return unit_normal_vector
 
 
-def to_four_momentum(input:DataFrame) -> DataFrame:
+def to_four_momentum(input: DataFrame) -> DataFrame:
     """
     Create a labeled four-momentum dataframe.
     """
@@ -153,25 +143,25 @@ def to_four_momentum(input:DataFrame) -> DataFrame:
     return out
 
 
-def to_three_momentum(input:DataFrame) -> DataFrame:
+def to_three_momentum(input: DataFrame) -> DataFrame:
     """
     Create a labeled three-momentum dataframe.
     """
     if not input.shape[1] == 3:
         raise ValueError("Input must have three columns.")
-    out = dataframe_with_three_columns.copy()
+    out = input.copy()
     out.columns = ["px", "py", "pz"]
     return out
 
 
-def four_mom_to_three_mom(input:DataFrame) -> DataFrame:
+def four_mom_to_three_mom(input: DataFrame) -> DataFrame:
     input = to_four_momentum(input)
     out = input.drop(columns="E")
     out = to_three_momentum(out)
     return out
 
 
-def to_three_velocity(input:DataFrame) -> DataFrame:
+def to_three_velocity(input: DataFrame) -> DataFrame:
     """
     Create a labeled three-velocity dataframe.
     """
@@ -182,7 +172,9 @@ def to_three_velocity(input:DataFrame) -> DataFrame:
     return out
 
 
-def calc_inv_mass_sq(four_momentum_1: DataFrame, four_momentum_2: DataFrame) -> DataFrame:
+def calc_inv_mass_sq(
+    four_momentum_1: DataFrame, four_momentum_2: DataFrame
+) -> DataFrame:
     """
     Calculate squared invariant masses for two particle systems.
     """
@@ -190,9 +182,9 @@ def calc_inv_mass_sq(four_momentum_1: DataFrame, four_momentum_2: DataFrame) -> 
     four_momentum_1 = to_four_momentum(four_momentum_1)
     four_momentum_2 = to_four_momentum(four_momentum_2)
 
-    four_momentum_sum = four_momentum_1 + four_momentum_2    
+    four_momentum_sum = four_momentum_1 + four_momentum_2
     three_momentum_sum = four_mom_to_three_mom(four_momentum_sum)
-    
+
     three_momentum_sum_mag_sq = vector_magnitude(three_momentum_sum) ** 2
     out = four_momentum_sum["E"] ** 2 - three_momentum_sum_mag_sq
     return out
@@ -250,23 +242,12 @@ def calc_lorentz_boost_matrix(three_velocity: DataFrame) -> DataFrame:
         ],
     )
     out["b00"] = lorentz_factor
-    out["b01"] = (
-        -lorentz_factor * three_velocity["vx"]
-    )
-    out["b02"] = (
-        -lorentz_factor * three_velocity["vy"]
-    )
-    out["b03"] = (
-        -lorentz_factor * three_velocity["vz"]
-    )
-    out["b10"] = (
-        -lorentz_factor * three_velocity["vx"]
-    )
+    out["b01"] = -lorentz_factor * three_velocity["vx"]
+    out["b02"] = -lorentz_factor * three_velocity["vy"]
+    out["b03"] = -lorentz_factor * three_velocity["vz"]
+    out["b10"] = -lorentz_factor * three_velocity["vx"]
     out["b11"] = (
-        1
-        + (lorentz_factor - 1)
-        * three_velocity["vx"] ** 2
-        / three_velocity_mag**2
+        1 + (lorentz_factor - 1) * three_velocity["vx"] ** 2 / three_velocity_mag**2
     )
     out["b12"] = (
         (lorentz_factor - 1)
@@ -280,9 +261,7 @@ def calc_lorentz_boost_matrix(three_velocity: DataFrame) -> DataFrame:
         * three_velocity["vz"]
         / three_velocity_mag**2
     )
-    out["b20"] = (
-        -lorentz_factor * three_velocity["vy"]
-    )
+    out["b20"] = -lorentz_factor * three_velocity["vy"]
     out["b21"] = (
         (lorentz_factor - 1)
         * three_velocity["vy"]
@@ -290,10 +269,7 @@ def calc_lorentz_boost_matrix(three_velocity: DataFrame) -> DataFrame:
         / three_velocity_mag**2
     )
     out["b22"] = (
-        1
-        + (lorentz_factor - 1)
-        * three_velocity["vy"] ** 2
-        / three_velocity_mag**2
+        1 + (lorentz_factor - 1) * three_velocity["vy"] ** 2 / three_velocity_mag**2
     )
     out["b23"] = (
         (lorentz_factor - 1)
@@ -301,9 +277,7 @@ def calc_lorentz_boost_matrix(three_velocity: DataFrame) -> DataFrame:
         * three_velocity["vz"]
         / three_velocity_mag**2
     )
-    out["b30"] = (
-        -lorentz_factor * three_velocity["vz"]
-    )
+    out["b30"] = -lorentz_factor * three_velocity["vz"]
     out["b31"] = (
         (lorentz_factor - 1)
         * three_velocity["vz"]
@@ -317,10 +291,7 @@ def calc_lorentz_boost_matrix(three_velocity: DataFrame) -> DataFrame:
         / three_velocity_mag**2
     )
     out["b33"] = (
-        1
-        + (lorentz_factor - 1)
-        * three_velocity["vz"] ** 2
-        / three_velocity_mag**2
+        1 + (lorentz_factor - 1) * three_velocity["vz"] ** 2 / three_velocity_mag**2
     )
     return out
 
@@ -329,15 +300,9 @@ def boost(reference_four_momentum: DataFrame, four_vector: DataFrame) -> DataFra
     """
     Lorentz boost a dataframe of four-vectors to a reference four momentum dataframe.
     """
-    reference_three_velocity = three_vel_from_four_mom(
-        reference_four_momentum
-    )
-    boost_matrix = calc_lorentz_boost_matrix(
-        reference_three_velocity
-    )
-    out = square_matrix_transform(
-        boost_matrix, four_vector
-    )
+    reference_three_velocity = three_vel_from_four_mom(reference_four_momentum)
+    boost_matrix = calc_lorentz_boost_matrix(reference_three_velocity)
+    out = square_matrix_transform(boost_matrix, four_vector)
     return out
 
 
@@ -357,7 +322,9 @@ def calc_cos_theta_lepton(
         reference_four_momentum=dilepton_four_mom,
         four_vector=pos_lepton_four_mom,
     )
-    pos_lepton_three_mom_dilepton_frame = four_mom_to_three_mom(pos_lepton_four_mom_dilepton_frame)
+    pos_lepton_three_mom_dilepton_frame = four_mom_to_three_mom(
+        pos_lepton_four_mom_dilepton_frame
+    )
 
     dilepton_four_mom_b_frame = boost(
         reference_four_momentum=b_meson_four_mom,
@@ -400,7 +367,7 @@ def calc_cos_theta_k(
 
 
 def calc_unit_norm_k_star_k_plane(
-    b_meson_four_mom : DataFrame,
+    b_meson_four_mom: DataFrame,
     k_star_four_mom: DataFrame,
     k_four_mom: DataFrame,
 ) -> DataFrame:
@@ -443,11 +410,12 @@ def calc_unit_norm_dilepton_pos_lepton_plane(
         reference_four_momentum=dilepton_four_mom,
         four_vector=pos_lepton_four_mom,
     )
-    pos_lepton_three_mom_dilepton_frame = four_mom_to_three_mom(pos_lepton_four_mom_dilepton_frame)
+    pos_lepton_three_mom_dilepton_frame = four_mom_to_three_mom(
+        pos_lepton_four_mom_dilepton_frame
+    )
 
     dilepton_four_mom_b_frame = boost(
-        reference_four_momentum=b_meson_four_mom, 
-        four_vector=dilepton_four_mom
+        reference_four_momentum=b_meson_four_mom, four_vector=dilepton_four_mom
     )
     dilepton_three_mom_b_frame = four_mom_to_three_mom(dilepton_four_mom_b_frame)
 
@@ -471,12 +439,10 @@ def calc_cos_chi(
     Chi is the angle between the K* K decay plane and the dilepton l+ decay plane.
     """
 
-    unit_norm_k_star_k_plane = (
-        calc_unit_norm_k_star_k_plane(
-            b_meson_four_mom=b_meson_four_mom,
-            k_star_four_mom=k_star_four_mom,
-            k_four_mom=k_four_mom,
-        )
+    unit_norm_k_star_k_plane = calc_unit_norm_k_star_k_plane(
+        b_meson_four_mom=b_meson_four_mom,
+        k_star_four_mom=k_star_four_mom,
+        k_four_mom=k_four_mom,
     )
     unit_norm_dilepton_pos_lepton_plane = calc_unit_norm_dilepton_pos_lepton_plane(
         b_meson_four_mom=b_meson_four_mom,
@@ -561,7 +527,10 @@ def calc_chi(
     )
 
     out = sign_chi * arccos(cos_chi)
-    convert_to_positive_angles = lambda x: x.where(x > 0, x + 2*pi)
+
+    def convert_to_positive_angles(x):
+        return x.where(x > 0, x + 2 * pi)
+
     out = convert_to_positive_angles(out)
     return out
 
@@ -573,15 +542,14 @@ def calc_dif_inv_mass_k_pi_k_star(
     Calcualate the difference between the invariant mass of the K pi system and the K*'s invariant mass (PDG value).
     """
     inv_mass_k_star = 0.892
-    inv_mass_k_pi = sqrt(calc_inv_mass_sq(
-        four_momentum_1=k_four_mom,
-        four_momentum_2=pi_four_mom
-    ))
+    inv_mass_k_pi = sqrt(
+        calc_inv_mass_sq(four_momentum_1=k_four_mom, four_momentum_2=pi_four_mom)
+    )
     out = inv_mass_k_pi - inv_mass_k_star
     return out
 
 
-def calc_vars(input:DataFrame, lepton_flavor:str):
+def calc_vars(input: DataFrame, lepton_flavor: str):
     """
     Calculate detector and generator level variables of B -> K* l+ l- decays.
 
@@ -594,30 +562,38 @@ def calc_vars(input:DataFrame, lepton_flavor:str):
 
     b_meson_four_mom = input[["E", "px", "py", "pz"]]
     b_meson_four_mom_mc = input[["mcE", "mcPX", "mcPY", "mcPZ"]]
-    pos_lepton_four_mom = input[[
-        f"{lepton_flavor}_p_E",
-        f"{lepton_flavor}_p_px",
-        f"{lepton_flavor}_p_py",
-        f"{lepton_flavor}_p_pz",    
-    ]]
-    pos_lepton_four_mom_mc = input[[
-        f"{lepton_flavor}_p_mcE",
-        f"{lepton_flavor}_p_mcPX",
-        f"{lepton_flavor}_p_mcPY",
-        f"{lepton_flavor}_p_mcPZ",
-    ]]
-    neg_lepton_four_mom = input[[
-        f"{lepton_flavor}_m_E",
-        f"{lepton_flavor}_m_px",
-        f"{lepton_flavor}_m_py",
-        f"{lepton_flavor}_m_pz",
-    ]]
-    neg_lepton_four_mom_mc = input[[
-        f"{lepton_flavor}_m_mcE",
-        f"{lepton_flavor}_m_mcPX",
-        f"{lepton_flavor}_m_mcPY",
-        f"{lepton_flavor}_m_mcPZ",
-    ]]
+    pos_lepton_four_mom = input[
+        [
+            f"{lepton_flavor}_p_E",
+            f"{lepton_flavor}_p_px",
+            f"{lepton_flavor}_p_py",
+            f"{lepton_flavor}_p_pz",
+        ]
+    ]
+    pos_lepton_four_mom_mc = input[
+        [
+            f"{lepton_flavor}_p_mcE",
+            f"{lepton_flavor}_p_mcPX",
+            f"{lepton_flavor}_p_mcPY",
+            f"{lepton_flavor}_p_mcPZ",
+        ]
+    ]
+    neg_lepton_four_mom = input[
+        [
+            f"{lepton_flavor}_m_E",
+            f"{lepton_flavor}_m_px",
+            f"{lepton_flavor}_m_py",
+            f"{lepton_flavor}_m_pz",
+        ]
+    ]
+    neg_lepton_four_mom_mc = input[
+        [
+            f"{lepton_flavor}_m_mcE",
+            f"{lepton_flavor}_m_mcPX",
+            f"{lepton_flavor}_m_mcPY",
+            f"{lepton_flavor}_m_mcPZ",
+        ]
+    ]
     k_four_mom = input[["K_p_E", "K_p_px", "K_p_py", "K_p_pz"]]
     k_four_mom_mc = input[["K_p_mcE", "K_p_mcPX", "K_p_mcPY", "K_p_mcPZ"]]
     pi_four_mom = input[["pi_m_E", "pi_m_px", "pi_m_py", "pi_m_pz"]]
@@ -635,7 +611,7 @@ def calc_vars(input:DataFrame, lepton_flavor:str):
         pos_lepton_four_mom_mc,
         neg_lepton_four_mom_mc,
     )
-    out[f"cos_theta_lepton"] = calc_cos_theta_lepton(
+    out["cos_theta_lepton"] = calc_cos_theta_lepton(
         pos_lepton_four_mom=pos_lepton_four_mom,
         neg_lepton_four_mom=neg_lepton_four_mom,
         b_meson_four_mom=b_meson_four_mom,
@@ -669,16 +645,12 @@ def calc_vars(input:DataFrame, lepton_flavor:str):
         pos_lepton_four_mom=pos_lepton_four_mom_mc,
         neg_lepton_four_mom=neg_lepton_four_mom_mc,
     )
-    out["dif_inv_mass_k_pi_k_star"] = (
-        calc_dif_inv_mass_k_pi_k_star(
-            k_four_mom=k_four_mom,
-            pi_four_mom=pi_four_mom,
-        )
+    out["dif_inv_mass_k_pi_k_star"] = calc_dif_inv_mass_k_pi_k_star(
+        k_four_mom=k_four_mom,
+        pi_four_mom=pi_four_mom,
     )
-    out["dif_inv_mass_k_pi_k_star_mc"] = (
-        calc_dif_inv_mass_k_pi_k_star(
-            k_four_mom=k_four_mom_mc,
-            pi_four_mom=pi_four_mom_mc,
-        )
+    out["dif_inv_mass_k_pi_k_star_mc"] = calc_dif_inv_mass_k_pi_k_star(
+        k_four_mom=k_four_mom_mc,
+        pi_four_mom=pi_four_mom_mc,
     )
     return out

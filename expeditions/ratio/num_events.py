@@ -37,5 +37,5 @@ def calc_num_events(
 
 if __name__ == "__main__":
 
-    num = calc_num_events()
+    num = calc_num_events(int_lum_inv_ab=50)
     print(num)

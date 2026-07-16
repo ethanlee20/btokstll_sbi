@@ -23,8 +23,8 @@ def main():
 
     device = select_device()
 
-    train_dataset = prep_train_data("data/train_small.parquet")
-    eval_dataset = prep_train_data("data/val_small.parquet")
+    train_dataset = prep_train_data("data/train/combo.parquet")
+    eval_dataset = prep_train_data("data/val/combo.parquet")
 
     train_means = train_dataset.features.mean(dim=0)
     train_stds = train_dataset.features.std(dim=0)

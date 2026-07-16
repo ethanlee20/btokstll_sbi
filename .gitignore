@@ -6,3 +6,6 @@ __pycache__
 *.parquet
 *.png
 *.jpg
+*.log
+*.json
+*.dec

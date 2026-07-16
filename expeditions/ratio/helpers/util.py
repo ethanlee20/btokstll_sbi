@@ -1,13 +1,13 @@
 from typing import Any
+from pathlib import Path
+from json import load
 
 from pandas import DataFrame, Series, Index
 from torch import cuda, device, Tensor, randperm, from_numpy, stack, all
 from torch.nn import Module
 
 
-def read_json(
-    path:Path|str
-) -> dict:
+def read_json(path: Path | str) -> dict:
     with open(path) as file:
         return load(file)
 
