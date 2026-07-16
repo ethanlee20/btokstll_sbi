@@ -572,7 +572,7 @@ def calc_chi(
 
 
 def calc_dif_inv_mass_k_pi_k_star(
-    k_four_mom: DataFrame, pi_four_momentum: DataFrame
+    k_four_mom: DataFrame, pi_four_mom: DataFrame
 ) -> Series:
     """
     Calcualate the difference between the invariant mass of the K pi system and the K*'s invariant mass (PDG value).
@@ -580,7 +580,7 @@ def calc_dif_inv_mass_k_pi_k_star(
     inv_mass_k_star = 0.892
     inv_mass_k_pi = sqrt(calc_inv_mass_sq(
         four_momentum_1=k_four_mom,
-        four_momentum_2=pi_four_momentum
+        four_momentum_2=pi_four_mom
     ))
     out = inv_mass_k_pi - inv_mass_k_star
     return out
@@ -597,146 +597,93 @@ def calc_vars(input:DataFrame, lepton_flavor:str):
     if lepton_flavor not in ("mu", "e"):
         raise ValueError(f"Lepton flavor must be 'mu' or 'e'. Got: {lepton_flavor}")
 
-    b_meson_four_mom = dataframe[["E", "px", "py", "pz"]]
-    B_meson_generated_four_momentum = to_four_momentum(
-        dataframe[["mcE", "mcPX", "mcPY", "mcPZ"]]
-    )
-    positive_lepton_measured_four_momentum = (
-        to_four_momentum(
-            dataframe[
-                [
-                    f"{lepton_flavor}_p_E",
-                    f"{lepton_flavor}_p_px",
-                    f"{lepton_flavor}_p_py",
-                    f"{lepton_flavor}_p_pz",
-                ]
-            ]
-        )
-    )
-    positive_lepton_generated_four_momentum = (
-        to_four_momentum(
-            dataframe[
-                [
-                    f"{lepton_flavor}_p_mcE",
-                    f"{lepton_flavor}_p_mcPX",
-                    f"{lepton_flavor}_p_mcPY",
-                    f"{lepton_flavor}_p_mcPZ",
-                ]
-            ]
-        )
-    )
-    negative_lepton_measured_four_momentum = (
-        to_four_momentum(
-            dataframe[
-                [
-                    f"{lepton_flavor}_m_E",
-                    f"{lepton_flavor}_m_px",
-                    f"{lepton_flavor}_m_py",
-                    f"{lepton_flavor}_m_pz",
-                ]
-            ]
-        )
-    )
-    negative_lepton_generated_four_momentum = (
-        to_four_momentum(
-            dataframe[
-                [
-                    f"{lepton_flavor}_m_mcE",
-                    f"{lepton_flavor}_m_mcPX",
-                    f"{lepton_flavor}_m_mcPY",
-                    f"{lepton_flavor}_m_mcPZ",
-                ]
-            ]
-        )
-    )
-    K_measured_four_momentum = to_four_momentum(
-        dataframe[["K_p_E", "K_p_px", "K_p_py", "K_p_pz"]]
-    )
-    K_generated_four_momentum = to_four_momentum(
-        dataframe[["K_p_mcE", "K_p_mcPX", "K_p_mcPY", "K_p_mcPZ"]]
-    )
-    pi_measured_four_momentum = to_four_momentum(
-        dataframe[["pi_m_E", "pi_m_px", "pi_m_py", "pi_m_pz"]]
-    )
-    pi_generated_four_momentum = to_four_momentum(
-        dataframe[["pi_m_mcE", "pi_m_mcPX", "pi_m_mcPY", "pi_m_mcPZ"]]
-    )
-    K_star_measured_four_momentum = to_four_momentum(
-        dataframe[["KST0_E", "KST0_px", "KST0_py", "KST0_pz"]]
-    )
-    K_star_generated_four_momentum = to_four_momentum(
-        dataframe[["KST0_mcE", "KST0_mcPX", "KST0_mcPY", "KST0_mcPZ"]]
-    )
+    b_meson_four_mom = input[["E", "px", "py", "pz"]]
+    b_meson_four_mom_mc = input[["mcE", "mcPX", "mcPY", "mcPZ"]]
+    pos_lepton_four_mom = input[[
+        f"{lepton_flavor}_p_E",
+        f"{lepton_flavor}_p_px",
+        f"{lepton_flavor}_p_py",
+        f"{lepton_flavor}_p_pz",    
+    ]]
+    pos_lepton_four_mom_mc = input[[
+        f"{lepton_flavor}_p_mcE",
+        f"{lepton_flavor}_p_mcPX",
+        f"{lepton_flavor}_p_mcPY",
+        f"{lepton_flavor}_p_mcPZ",
+    ]]
+    neg_lepton_four_mom = input[[
+        f"{lepton_flavor}_m_E",
+        f"{lepton_flavor}_m_px",
+        f"{lepton_flavor}_m_py",
+        f"{lepton_flavor}_m_pz",
+    ]]
+    neg_lepton_four_mom_mc = input[[
+        f"{lepton_flavor}_m_mcE",
+        f"{lepton_flavor}_m_mcPX",
+        f"{lepton_flavor}_m_mcPY",
+        f"{lepton_flavor}_m_mcPZ",
+    ]]
+    k_four_mom = input[["K_p_E", "K_p_px", "K_p_py", "K_p_pz"]]
+    k_four_mom_mc = input[["K_p_mcE", "K_p_mcPX", "K_p_mcPY", "K_p_mcPZ"]]
+    pi_four_mom = input[["pi_m_E", "pi_m_px", "pi_m_py", "pi_m_pz"]]
+    pi_four_mom_mc = input[["pi_m_mcE", "pi_m_mcPX", "pi_m_mcPY", "pi_m_mcPZ"]]
+    k_star_four_mom = input[["KST0_E", "KST0_px", "KST0_py", "KST0_pz"]]
+    k_star_four_mom_mc = input[["KST0_mcE", "KST0_mcPX", "KST0_mcPY", "KST0_mcPZ"]]
 
-    dataframe = dataframe.copy()
+    out = input.copy()
 
-    dataframe["q_squared"] = calc_inv_mass_sq(
-        four_momentum_1=positive_lepton_measured_four_momentum,
-        four_momentum_2=negative_lepton_measured_four_momentum,
+    out["q_sq"] = calc_inv_mass_sq(
+        pos_lepton_four_mom,
+        neg_lepton_four_mom,
     )
-    dataframe["q_squared_mc"] = calc_inv_mass_sq(
-        four_momentum_1=positive_lepton_generated_four_momentum,
-        four_momentum_2=negative_lepton_generated_four_momentum,
+    out["q_sq_mc"] = calc_inv_mass_sq(
+        pos_lepton_four_mom_mc,
+        neg_lepton_four_mom_mc,
     )
-    dataframe[f"cos_theta_{lepton_flavor}"] = calc_cos_theta_lepton(
-        pos_lepton_four_mom=positive_lepton_measured_four_momentum,
-        neg_lepton_four_mom=negative_lepton_measured_four_momentum,
+    out[f"cos_theta_lepton"] = calc_cos_theta_lepton(
+        pos_lepton_four_mom=pos_lepton_four_mom,
+        neg_lepton_four_mom=neg_lepton_four_mom,
         b_meson_four_mom=b_meson_four_mom,
     )
-    dataframe[f"cos_theta_{lepton_flavor}_mc"] = calc_cos_theta_lepton(
-        pos_lepton_four_mom=positive_lepton_generated_four_momentum,
-        neg_lepton_four_mom=negative_lepton_generated_four_momentum,
-        b_meson_four_mom=B_meson_generated_four_momentum,
+    out["cos_theta_lepton_mc"] = calc_cos_theta_lepton(
+        pos_lepton_four_mom=pos_lepton_four_mom_mc,
+        neg_lepton_four_mom=neg_lepton_four_mom_mc,
+        b_meson_four_mom=b_meson_four_mom_mc,
     )
-    dataframe["cos_theta_k"] = calc_cos_theta_k(
-        k_four_mom=K_measured_four_momentum,
-        k_star_four_mom=K_star_measured_four_momentum,
+    out["cos_theta_k"] = calc_cos_theta_k(
+        k_four_mom=k_four_mom,
+        k_star_four_mom=k_star_four_mom,
         b_meson_four_mom=b_meson_four_mom,
     )
-    dataframe["cos_theta_K_mc"] = calc_cos_theta_k(
-        k_four_mom=K_generated_four_momentum,
-        k_star_four_mom=K_star_generated_four_momentum,
-        b_meson_four_mom=B_meson_generated_four_momentum,
+    out["cos_theta_k_mc"] = calc_cos_theta_k(
+        k_four_mom=k_four_mom_mc,
+        k_star_four_mom=k_star_four_mom_mc,
+        b_meson_four_mom=b_meson_four_mom_mc,
     )
-    dataframe["cos_chi"] = calc_cos_chi(
+    out["chi"] = calc_chi(
         b_meson_four_mom=b_meson_four_mom,
-        k_four_mom=K_measured_four_momentum,
-        k_star_four_mom=K_star_measured_four_momentum,
-        pos_lepton_four_mom=positive_lepton_measured_four_momentum,
-        neg_lepton_four_mom=negative_lepton_measured_four_momentum,
+        k_four_mom=k_four_mom,
+        k_star_four_mom=k_star_four_mom,
+        pos_lepton_four_mom=pos_lepton_four_mom,
+        neg_lepton_four_mom=neg_lepton_four_mom,
     )
-    dataframe["cos_chi_mc"] = calc_cos_chi(
-        b_meson_four_mom=B_meson_generated_four_momentum,
-        k_four_mom=K_generated_four_momentum,
-        k_star_four_mom=K_star_generated_four_momentum,
-        pos_lepton_four_mom=positive_lepton_generated_four_momentum,
-        neg_lepton_four_mom=negative_lepton_generated_four_momentum,
+    out["chi_mc"] = calc_chi(
+        b_meson_four_mom=b_meson_four_mom_mc,
+        k_four_mom=k_four_mom_mc,
+        k_star_four_mom=k_star_four_mom_mc,
+        pos_lepton_four_mom=pos_lepton_four_mom_mc,
+        neg_lepton_four_mom=neg_lepton_four_mom_mc,
     )
-    dataframe["chi"] = calc_chi(
-        b_meson_four_mom=b_meson_four_mom,
-        k_four_mom=K_measured_four_momentum,
-        k_star_four_mom=K_star_measured_four_momentum,
-        pos_lepton_four_mom=positive_lepton_measured_four_momentum,
-        neg_lepton_four_mom=negative_lepton_measured_four_momentum,
-    )
-    dataframe["chi_mc"] = calc_chi(
-        b_meson_four_mom=B_meson_generated_four_momentum,
-        k_four_mom=K_generated_four_momentum,
-        k_star_four_mom=K_star_generated_four_momentum,
-        pos_lepton_four_mom=positive_lepton_generated_four_momentum,
-        neg_lepton_four_mom=negative_lepton_generated_four_momentum,
-    )
-    dataframe["inv_M_K_pi_shifted"] = (
+    out["dif_inv_mass_k_pi_k_star"] = (
         calc_dif_inv_mass_k_pi_k_star(
-            k_four_mom=K_measured_four_momentum,
-            pi_four_momentum=pi_measured_four_momentum,
+            k_four_mom=k_four_mom,
+            pi_four_mom=pi_four_mom,
         )
     )
-    dataframe["inv_M_K_pi_shifted_mc"] = (
+    out["dif_inv_mass_k_pi_k_star_mc"] = (
         calc_dif_inv_mass_k_pi_k_star(
-            k_four_mom=K_generated_four_momentum,
-            pi_four_momentum=pi_generated_four_momentum,
+            k_four_mom=k_four_mom_mc,
+            pi_four_mom=pi_four_mom_mc,
         )
     )
-
-    return dataframe
+    return out
