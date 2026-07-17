@@ -1,6 +1,7 @@
 from torch import linspace
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR, ExponentialLR
 
 from helpers.data_prep import prep_train_data, prep_eval_data
 from helpers.train import run_training_on_datasets
@@ -34,18 +35,20 @@ def main():
     model = model.to(device)
 
     loss_fn = BCEWithLogitsLoss()
-
-    optimizer = AdamW(model.parameters(), lr=3e-4)
+    optimizer = AdamW(model.parameters(), lr=3e-4, weight_decay=0.001)
+    # lr_scheduler = CosineAnnealingLR(optimizer, 100)
+    lr_scheduler = ExponentialLR(optimizer, 0.9)
 
     losses = run_training_on_datasets(
         train_dataset=train_dataset,
-        train_batch_size=5_000,
+        train_batch_size=10_000,
         model=model,
         loss_fn=loss_fn,
         optimizer=optimizer,
-        num_epochs=30,
+        num_epochs=50,
         eval_dataset=eval_dataset,
-        eval_batch_size=5_000,
+        eval_batch_size=10_000,
+        lr_scheduler=lr_scheduler
     )
 
     plot_to_file(
@@ -56,13 +59,13 @@ def main():
         compute_log=True,
     )
 
-    eval_set_dataset = prep_eval_data("data/val_small.parquet")
+    eval_set_dataset = prep_eval_data("data//val/combo.parquet")
 
-    parameters = linspace(-10, 0, 100)
+    parameters = linspace(-2, 1, 100)
     list_log_probs = []
     list_true_values = []
 
-    for i in (0, 5, 9):
+    for i in (5, 10, 15):
 
         label = eval_set_dataset.labels[i]
         features = eval_set_dataset.features[i]

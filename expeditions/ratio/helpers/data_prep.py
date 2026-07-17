@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from tqdm import tqdm
 from torch import ones, zeros, float32
 from pandas import read_parquet, DataFrame, concat
 from uproot import open
@@ -75,8 +76,12 @@ def remove_unnecessary_files(dir_:str|Path):
 def prep_data_dir(dir_: str | Path):
     remove_unnecessary_files(dir_)    
     root_file_paths = Path(dir_).rglob("*.root")
-    parquet_file_paths = [prep_root_file(path) for path in root_file_paths]
+    parquet_file_paths = [
+        prep_root_file(path) for path in 
+        tqdm(list(root_file_paths), desc="Prepping individual files")
+    ]
     dataframes = [read_parquet(path) for path in parquet_file_paths]
+    print("Combining files...")
     out = concat(dataframes)
     out.to_parquet(Path(dir_).joinpath("combo.parquet"))
 
