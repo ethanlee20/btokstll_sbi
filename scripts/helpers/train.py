@@ -118,9 +118,9 @@ def _run_training_epoch(
             loss_fn,
         )
         eval_loss_series = pandas_from_tensor(eval_loss, names="eval")
-    if lr_scheduler is not None: 
+    if lr_scheduler is not None:
         lr_scheduler.step()
-    
+
     loss_table = (
         train_loss_series
         if not run_eval
@@ -162,7 +162,7 @@ def run_training_on_datasets(
     num_epochs: int,
     eval_dataset: Dataset | None = None,
     eval_batch_size: int | None = None,
-    lr_scheduler: None | LRScheduler = None
+    lr_scheduler: None | LRScheduler = None,
 ) -> DataFrame | Series:
     train_data_loader = DataLoader(train_dataset, train_batch_size)
     eval_data_loader = (
@@ -175,6 +175,6 @@ def run_training_on_datasets(
         optimizer,
         num_epochs,
         eval_data_loader=eval_data_loader,
-        lr_scheduler=lr_scheduler
+        lr_scheduler=lr_scheduler,
     )
     return losses

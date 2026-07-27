@@ -21,7 +21,7 @@ def open_root_data_file(path: Path | str) -> DataFrame:
     Each tree will be labeled by a pandas multi-index.
     """
     unwanted_keys = ["persistent;1", "persistent;2"]
-    with open(path) as file: 
+    with open(path) as file:
         keys = [key.split(";")[0] for key in file.keys() if key not in unwanted_keys]
         dataframes = [file[key].arrays(library="pd") for key in keys]
     out = concat(dataframes, keys=keys, names=["sim_type"])
@@ -66,7 +66,7 @@ def prep_root_file(path: Path | str):
     return save_path
 
 
-def remove_unnecessary_files(dir_:str|Path):
+def remove_unnecessary_files(dir_: str | Path):
     dir_ = Path(dir_)
     unnecessary_file = "._*"
     for path in dir_.rglob(unnecessary_file):
@@ -74,11 +74,11 @@ def remove_unnecessary_files(dir_:str|Path):
 
 
 def prep_data_dir(dir_: str | Path):
-    remove_unnecessary_files(dir_)    
+    remove_unnecessary_files(dir_)
     root_file_paths = Path(dir_).rglob("*.root")
     parquet_file_paths = [
-        prep_root_file(path) for path in 
-        tqdm(list(root_file_paths), desc="Prepping individual files")
+        prep_root_file(path)
+        for path in tqdm(list(root_file_paths), desc="Prepping individual files")
     ]
     dataframes = [read_parquet(path) for path in parquet_file_paths]
     print("Combining files...")
@@ -94,7 +94,7 @@ def prep_train_data_ref(
     ref_df = read_parquet(ref_data_path)
     if len(vary_df) != len(ref_df):
         raise ValueError("Datasets must have same number of events.")
-    
+
     feature_names = [
         "q_sq",
         "cos_theta_lepton",

@@ -38,17 +38,21 @@ class MLP(Module):
         logits = self.layers(scaled_x)
         return logits
 
-    def log_likelihood_ratio(self, x: Tensor) -> Tensor:
+    def probability(self, x: Tensor) -> Tensor:
         logits = self.forward(x)
-        likelihood_ratio = 1/sigmoid(logits) - 1
+        out = sigmoid(logits)
+        return out
+
+    def log_likelihood_ratio(self, x: Tensor) -> Tensor:
+        likelihood_ratio = 1 / self.probability(x) - 1
         out = log(likelihood_ratio)
         return out
 
 
 def save_model_state_dict(
-    model:Module, 
-    path:Path|str,
-    overwrite_ok:bool=True,
+    model: Module,
+    path: Path | str,
+    overwrite_ok: bool = True,
 ):
     path = Path(path)
     if not path.parent.is_dir():
@@ -58,8 +62,6 @@ def save_model_state_dict(
     save(model.state_dict(), path)
 
 
-def load_model_state_dict( 
-    path: Path|str
-):
+def load_model_state_dict(path: Path | str):
     state_dict = load(path, weights_only=True)
     return state_dict
