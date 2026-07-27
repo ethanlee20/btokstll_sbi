@@ -18,8 +18,9 @@ def evaluate(model: Module, features: Tensor, parameter_samples: Tensor) -> Tens
 
     features = features.to(device)
 
-    predictions = []
+    model.eval()
 
+    predictions = []
     for parameter in parameter_samples:
         parameter = parameter.item()
         model_input = append_parameter(parameter, features)

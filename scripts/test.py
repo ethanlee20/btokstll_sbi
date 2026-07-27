@@ -3,9 +3,9 @@ from torch.nn import BCEWithLogitsLoss
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, ExponentialLR
 
-from helpers.data_prep import prep_train_data, prep_eval_data
+from helpers.data_prep import prep_train_data_ref, prep_eval_data
 from helpers.train import run_training_on_datasets
-from helpers.model import MLP
+from helpers.model import MLP, save_model_state_dict, load_model_state_dict
 from helpers.plot import (
     turn_on_hq_plots,
     turn_on_dark_plots,
@@ -17,15 +17,17 @@ from helpers.util import select_device
 from helpers.evaluate import evaluate
 
 
-def main():
-
-    turn_on_hq_plots()
-    turn_on_dark_plots()
+def train():
 
     device = select_device()
-
-    train_dataset = prep_train_data("data/train/combo.parquet")
-    eval_dataset = prep_train_data("data/val/combo.parquet")
+    train_dataset = prep_train_data_ref(
+        vary_data_path="data/train_vary/combo.parquet",
+        ref_data_path="data/train_sm/combo.parquet"
+    )
+    eval_dataset = prep_train_data_ref(
+        vary_data_path="data/val_vary/combo.parquet",
+        ref_data_path="data/val_sm/combo.parquet",
+    )
 
     train_means = train_dataset.features.mean(dim=0)
     train_stds = train_dataset.features.std(dim=0)
@@ -35,9 +37,8 @@ def main():
     model = model.to(device)
 
     loss_fn = BCEWithLogitsLoss()
-    optimizer = AdamW(model.parameters(), lr=3e-4, weight_decay=0.001)
-    # lr_scheduler = CosineAnnealingLR(optimizer, 100)
-    lr_scheduler = ExponentialLR(optimizer, 0.9)
+    optimizer = AdamW(model.parameters(), lr=3e-4, weight_decay=0.02)
+    lr_scheduler = ExponentialLR(optimizer, 0.95)
 
     losses = run_training_on_datasets(
         train_dataset=train_dataset,
@@ -45,11 +46,13 @@ def main():
         model=model,
         loss_fn=loss_fn,
         optimizer=optimizer,
-        num_epochs=50,
+        num_epochs=100,
         eval_dataset=eval_dataset,
         eval_batch_size=10_000,
         lr_scheduler=lr_scheduler
     )
+
+    save_model_state_dict(model, "models/model.pt") 
 
     plot_to_file(
         "plots/loss.png",
@@ -59,13 +62,22 @@ def main():
         compute_log=True,
     )
 
-    eval_set_dataset = prep_eval_data("data//val/combo.parquet")
+
+def eval():
+
+    device = select_device()
+
+    model = MLP()
+
+    model.load_state_dict(load_model_state_dict("models/model.pt"))
+
+    eval_set_dataset = prep_eval_data("data/val/combo.parquet")
 
     parameters = linspace(-2, 1, 100)
     list_log_probs = []
     list_true_values = []
 
-    for i in (5, 10, 15):
+    for i in (4, 10, 18):
 
         label = eval_set_dataset.labels[i]
         features = eval_set_dataset.features[i]
@@ -83,6 +95,15 @@ def main():
         true_values=list_true_values,
         colors=["#377eb8", "#ff7f00", "#4daf4a"],
     )
+
+def main():
+
+    turn_on_hq_plots()
+    turn_on_dark_plots()
+    train()
+    eval()
+
+    
 
 
 if __name__ == "__main__":

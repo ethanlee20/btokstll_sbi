@@ -86,7 +86,43 @@ def prep_data_dir(dir_: str | Path):
     out.to_parquet(Path(dir_).joinpath("combo.parquet"))
 
 
-def prep_train_data(
+def prep_train_data_ref(
+    vary_data_path: Path | str,
+    ref_data_path: Path | str,
+):
+    vary_df = read_parquet(vary_data_path)
+    ref_df = read_parquet(ref_data_path)
+    if len(vary_df) != len(ref_df):
+        raise ValueError("Datasets must have same number of events.")
+    
+    feature_names = [
+        "q_sq",
+        "cos_theta_lepton",
+        "cos_theta_k",
+        "chi",
+    ]
+    label_name = "dC_9"
+
+    ref_df[label_name] = vary_df[label_name].values
+
+    vary_dset = dataset_from_dataframe(
+        vary_df,
+        feature_names=feature_names + [label_name],
+        features_dtype="float32",
+    )
+    ref_dset = dataset_from_dataframe(
+        ref_df,
+        feature_names=feature_names + [label_name],
+        features_dtype="float32",
+    )
+
+    ref_dset.labels = ones(len(ref_dset), dtype=float32).unsqueeze(-1)
+    vary_dset.labels = zeros(len(vary_dset), dtype=float32).unsqueeze(-1)
+    out = concat_datasets([ref_dset, vary_dset])
+    return out
+
+
+def prep_train_data_shuffle(
     path: Path | str,
 ):
     feature_names = [

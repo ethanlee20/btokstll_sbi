@@ -1,3 +1,4 @@
+from tqdm import tqdm
 from pandas import concat, DataFrame, Series
 from torch import Tensor, zeros, no_grad
 from torch.nn import Module
@@ -138,7 +139,7 @@ def run_training(
     lr_scheduler: None | LRScheduler = None,
 ) -> DataFrame | Series:
     losses = []
-    for _epoch in range(num_epochs):
+    for _epoch in tqdm(range(num_epochs), desc="Epoch"):
         epoch_losses = _run_training_epoch(
             train_data_loader=train_data_loader,
             model=model,

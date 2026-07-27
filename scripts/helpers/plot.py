@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 from numpy.typing import ArrayLike
-from numpy import arange, log10, max, argmax
+from numpy import arange, log10, max, argmax, nonzero
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.pyplot import (
@@ -90,7 +90,10 @@ def plot_predictions_dataset(
     mle_x = parameters[argmax(log_probabilities)]
     ax.scatter(mle_x, mle_y, color=color, s=25, zorder=100)
 
-    ax.set_ylabel(r"$\log p(\delta C_9 \;|\; \textrm{data}) + C$", fontsize=15)
+    conf = parameters[nonzero(log_probabilities > mle_y - 12.5)]
+    ax.hlines(mle_y, conf[0], conf[-1], color=color, linestyle="--", zorder=-101)
+
+    ax.set_ylabel(r"$\log p(\textrm{data} \;|\; \delta C_9) + c$", fontsize=15)
     ax.set_xlabel(r"$\delta C_9$", fontsize=15)
 
 

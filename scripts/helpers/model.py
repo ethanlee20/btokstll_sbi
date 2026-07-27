@@ -1,7 +1,9 @@
-from torch import Tensor, zeros, ones
-from torch.nn import Module, Sequential, Linear, ReLU
+from pathlib import Path
+
+from torch import Tensor, zeros, ones, save, load, log
+from torch.nn import Module, Sequential, Linear, ReLU, Dropout
 from torch.nn.parameter import Buffer
-from torch.nn.functional import logsigmoid
+from torch.nn.functional import logsigmoid, sigmoid
 
 
 class MLP(Module):
@@ -10,10 +12,13 @@ class MLP(Module):
         self.layers = Sequential(
             Linear(5, 500),
             ReLU(),
+            # Dropout(p=0.1),
             Linear(500, 500),
             ReLU(),
+            Dropout(p=0.2),
             Linear(500, 500),
             ReLU(),
+            Dropout(p=0.2),
             Linear(500, 1),
         )
 
@@ -35,5 +40,26 @@ class MLP(Module):
 
     def log_likelihood_ratio(self, x: Tensor) -> Tensor:
         logits = self.forward(x)
-        out = logsigmoid(logits) - logsigmoid(-logits)
+        likelihood_ratio = 1/sigmoid(logits) - 1
+        out = log(likelihood_ratio)
         return out
+
+
+def save_model_state_dict(
+    model:Module, 
+    path:Path|str,
+    overwrite_ok:bool=True,
+):
+    path = Path(path)
+    if not path.parent.is_dir():
+        raise ValueError(f"Parent directory doesn't exist: {path.parent}")
+    if path.exists() and not overwrite_ok:
+        raise ValueError(f"File exists: {path}")
+    save(model.state_dict(), path)
+
+
+def load_model_state_dict( 
+    path: Path|str
+):
+    state_dict = load(path, weights_only=True)
+    return state_dict
