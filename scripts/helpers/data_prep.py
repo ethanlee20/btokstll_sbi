@@ -169,3 +169,50 @@ def prep_eval_data(path: Path | str):
     )
     out = group_dataset_by_label(dataset)
     return out
+
+
+def prep_cal_data(
+    vary_data_path: Path | str,
+    ref_data_path: Path | str,
+):
+    vary_df = read_parquet(vary_data_path)
+    ref_df = read_parquet(ref_data_path)
+    if len(vary_df) != len(ref_df):
+        raise ValueError("Datasets must have same number of events.")
+
+    feature_names = [
+        "q_sq",
+        "cos_theta_lepton",
+        "cos_theta_k",
+        "chi",
+    ]
+    label_name = "dC_9"
+
+    ref_df[label_name] = vary_df[label_name].values
+
+    grouped_vary_df = vary_df.groupby(label_name)
+    grouped_ref_df = ref_df.groupby(label_name)
+
+    vary_dsets = {
+        param : dataset_from_dataframe(
+            group,
+            feature_names = feature_names + [label_name],
+            features_dtype="float32"
+        )
+        for param, group in grouped_vary_df
+    }
+    ref_dsets = {
+        param : dataset_from_dataframe(
+            group,
+            feature_names = feature_names + [label_name],
+            features_dtype="float32"
+        )
+        for param, group in grouped_ref_df
+    }
+
+    out = {}
+    for param in vary_dsets.keys():
+        ref_dsets[param].labels = ones(len(ref_dsets[param]), dtype=float32).unsqueeze(-1)
+        vary_dsets[param].labels = zeros(len(vary_dsets[param]), dtype=float32).unsqueeze(-1)
+        out[param] = concat_datasets([ref_dsets[param], vary_dsets[param]])
+    return out
