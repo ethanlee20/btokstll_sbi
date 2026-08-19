@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from torch import Tensor, zeros, ones, save, load, log
+from torch import Tensor, zeros, ones, save, load, log, from_numpy
 from torch.nn import Module, Sequential, Linear, ReLU, Dropout
 from torch.nn.parameter import Buffer
 from torch.nn.functional import logsigmoid, sigmoid
@@ -41,6 +41,12 @@ class MLP(Module):
     def probability(self, x: Tensor) -> Tensor:
         logits = self.forward(x)
         out = sigmoid(logits)
+        return out
+
+    def cal_prob(self, x: Tensor, cal_fit):
+        probs = self.probability(x)
+        cal_probs = cal_fit.predict(probs.numpy(force=True))
+        out = from_numpy(cal_probs)
         return out
 
     def log_likelihood_ratio(self, x: Tensor) -> Tensor:
