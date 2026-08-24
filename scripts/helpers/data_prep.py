@@ -28,26 +28,27 @@ def open_root_data_file(path: Path | str) -> DataFrame:
     return out
 
 
-def calc_vars_root_file(path: Path | str, lepton_flavor="mu") -> DataFrame:
-    """
-    Save the output DataFrame to a file.
-    """
-    dataframe = open_root_data_file(path)
-    dataframe = calc_vars(dataframe, lepton_flavor)
-    metadata_path = Path(path).with_name("metadata.json")
-    parameters = read_json(metadata_path)["parameter_values"]
-    out = dataframe.assign(**parameters)
-    return out
-
-
 def select_first_candidates(dataframe: DataFrame) -> DataFrame:
     out = dataframe[dataframe["__candidate__"] == 0].copy()
     return out
 
 
-def prep_root_file(path: Path | str):
-    dataframe = calc_vars_root_file(path)
-    dataframe = select_first_candidates(dataframe)
+def prep_root_file(path: Path | str, lepton_flavor="mu") -> Path:
+    dataframe = open_root_data_file(path)
+    dataframe = calc_vars(dataframe, lepton_flavor)
+    
+    metadata_path = Path(path).with_name("metadata.json")
+    metadata = read_json(metadata_path)
+    
+    parameters = metadata["parameter_values"]
+    out = dataframe.assign(**parameters)
+
+    trial_num = metadata["trial_num"]
+    out = out.assign(trial_num=trial_num).set_index("trial_num", append=True)
+    out.index = out.index.reorder_levels(["trial_num", "sim_type", None])
+
+    out = select_first_candidates(out)
+
     columns = [
         "q_sq",
         "q_sq_mc",
@@ -62,7 +63,7 @@ def prep_root_file(path: Path | str):
         "dC_10",
     ]
     save_path = Path(path).with_suffix(".parquet")
-    dataframe[columns].to_parquet(save_path)
+    out[columns].to_parquet(save_path)
     return save_path
 
 

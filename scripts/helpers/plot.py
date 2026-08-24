@@ -42,10 +42,10 @@ def plot_to_file(path, plot_fn, **kwargs):
     save_fig_and_close(fig, path)
 
 
-def plot_losses(
+def plot_loss(
     ax: Axes,
     train_losses: ArrayLike,
-    eval_losses: ArrayLike | None = None,
+    val_losses: ArrayLike | None = None,
     yscale: str = "linear",
     scatter_or_plot: str = "scatter",
     compute_log: bool = False,
@@ -57,19 +57,25 @@ def plot_losses(
             "scatter_or_plot should be 'scatter' or 'plot'." f"\nGot: {scatter_or_plot}"
         )
 
-    plot_fn = ax.scatter if scatter_or_plot == "scatter" else ax.plot
+    if val_losses is not None:
+        if len(val_losses) != len(train_losses):
+            raise ValueError
+
+    plot_fn = ax.scatter if scatter_or_plot == "scatter" else ax.plot if scatter_or_plot == "plot" else None
+    if plot_fn is None:
+        raise ValueError
 
     epochs = arange(len(train_losses))
 
     if compute_log:
         train_losses = log10(train_losses)
-    if compute_log and eval_losses is not None:
-        eval_losses = log10(eval_losses)
+    if compute_log and val_losses is not None:
+        val_losses = log10(val_losses)
 
     plot_fn(epochs, train_losses, label="Train", **kwargs)
 
-    if eval_losses is not None:
-        plot_fn(epochs, eval_losses, label="Eval.", **kwargs)
+    if val_losses is not None:
+        plot_fn(epochs, val_losses, label="Eval.", **kwargs)
 
     ax.set_yscale(yscale)
     ax.legend()

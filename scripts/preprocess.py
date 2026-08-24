@@ -8,7 +8,7 @@ def main():
         # "data/val_sm",
         # "data/val_vary",
         # "data/val",
-        "data/cal_sm",
+        # "data/cal_sm",
         "data/cal_vary",
     ):
         prep_data_dir(dir_)
