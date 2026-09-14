@@ -7,12 +7,12 @@ from uproot import open
 
 from .physics import calc_vars
 from .util import shuffle_pandas, read_json
-from .dataset import (
-    concat_datasets,
-    dataset_from_dataframe,
-    dataset_from_dataframe_parquet,
-    group_dataset_by_label,
-)
+# from .dataset import (
+#     concat_datasets,
+#     # dataset_from_dataframe,
+#     dataset_from_dataframe_parquet,
+#     group_dataset_by_label,
+# )
 
 
 def open_root_data_file(path: Path | str) -> DataFrame:
@@ -41,13 +41,13 @@ def prep_root_file(path: Path | str, lepton_flavor="mu") -> Path:
     metadata = read_json(metadata_path)
     
     parameters = metadata["parameter_values"]
-    out = dataframe.assign(**parameters)
+    dataframe = dataframe.assign(**parameters)
 
     trial_num = metadata["trial_num"]
-    out = out.assign(trial_num=trial_num).set_index("trial_num", append=True)
-    out.index = out.index.reorder_levels(["trial_num", "sim_type", None])
+    dataframe = dataframe.assign(trial_num=trial_num).set_index("trial_num", append=True)
+    dataframe.index = dataframe.index.reorder_levels(["trial_num", "sim_type", None])
 
-    out = select_first_candidates(out)
+    dataframe = select_first_candidates(dataframe)
 
     columns = [
         "q_sq",
@@ -62,8 +62,10 @@ def prep_root_file(path: Path | str, lepton_flavor="mu") -> Path:
         "dC_9",
         "dC_10",
     ]
+    dataframe = dataframe[columns]
+    
     save_path = Path(path).with_suffix(".parquet")
-    out[columns].to_parquet(save_path)
+    dataframe.to_parquet(save_path)
     return save_path
 
 
@@ -86,7 +88,7 @@ def prep_data_dir(dir_: str | Path):
     out = concat(dataframes)
     out.to_parquet(Path(dir_).joinpath("combo.parquet"))
 
-
+"""
 def prep_train_data_ref(
     vary_data_path: Path | str,
     ref_data_path: Path | str,
@@ -217,3 +219,4 @@ def prep_cal_data(
         vary_dsets[param].labels = zeros(len(vary_dsets[param]), dtype=float32).unsqueeze(-1)
         out[param] = concat_datasets([ref_dsets[param], vary_dsets[param]])
     return out
+"""
