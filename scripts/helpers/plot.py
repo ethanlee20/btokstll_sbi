@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 from numpy.typing import ArrayLike
 from numpy import arange, log10, max, argmax, nonzero
 from matplotlib.figure import Figure
@@ -11,6 +10,13 @@ from matplotlib.pyplot import (
     rcParams,
     close,
 )
+
+
+color_blind_palette = [
+    '#377eb8', '#ff7f00', '#4daf4a',
+    '#f781bf', '#a65628', '#984ea3',
+    '#999999', '#e41a1c', '#dede00'
+]
 
 
 def turn_on_hq_plots() -> None:
@@ -34,12 +40,6 @@ def save_fig_and_close(
 ) -> None:
     fig.savefig(path, bbox_inches="tight")
     close(fig)
-
-
-def plot_to_file(path, plot_fn, **kwargs):
-    fig, ax = subplots()
-    plot_fn(ax=ax, **kwargs)
-    save_fig_and_close(fig, path)
 
 
 def plot_loss(
@@ -83,40 +83,30 @@ def plot_loss(
     ax.set_xlabel("Epoch", fontsize=15)
 
 
-def plot_predictions_dataset(
+def plot_log_likelihood_ratio_scan(
     ax: Axes,
     parameters: ArrayLike,
     log_probabilities: ArrayLike,
+    mle_x, 
+    mle_y,
+    confidence_interval,
     true_value: float,
     color: str,
 ):
     ax.plot(parameters, log_probabilities, color=color)
     ax.axvline(true_value, color=color, linestyle="--", zorder=-100)
-    mle_y = max(log_probabilities)
-    mle_x = parameters[argmax(log_probabilities)]
     ax.scatter(mle_x, mle_y, color=color, s=25, zorder=100)
-
-    # conf = parameters[nonzero(log_probabilities > mle_y - 0.5)]
-    # ax.hlines(mle_y, conf[0], conf[-1], color=color, linestyle="--", zorder=-101)
+    ax.hlines(mle_y, confidence_interval[0], confidence_interval[-1], color=color, linestyle="--", zorder=-101)
 
     ax.set_ylabel(r"$\log p(\textrm{data} \;|\; \delta C_9) + c$", fontsize=15)
-    ax.set_xlabel(r"$\delta C_9$", fontsize=15)
+    ax.set_xlabel(r"$\delta C_9$", fontsize=15)    
 
 
-def plot_predictions_multiple_datasets(
-    ax: Axes,
-    parameters: ArrayLike,
-    log_probabilities: list[ArrayLike],
-    true_values: list[float],
-    colors: list[str],
-):
-    assert len(log_probabilities) == len(true_values) == len(colors)
+def plot_linearity(ax, predictions, true_values, error_bars, lim,):
 
-    for log_probs, true_value, color in zip(log_probabilities, true_values, colors):
-        plot_predictions_dataset(
-            ax=ax,
-            parameters=parameters,
-            log_probabilities=log_probs,
-            true_value=true_value,
-            color=color,
-        )
+    ax.plot(lim, lim, color="#377eb8", label="Ideal", zorder=-100)
+    ax.scatter(true_values, predictions, color="#ff7f00")
+    ax.vlines(true_values, error_bars[:,0], error_bars[:, 1], color='#4daf4a', linestyle="-", zorder=-101, label=r"Log Likelihood $1\sigma$")
+    ax.set_ylabel(r"Predicted $\delta C_9$", fontsize=16)
+    ax.set_xlabel(r"True $\delta C_9$", fontsize=16)
+    ax.legend()

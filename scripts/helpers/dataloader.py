@@ -128,8 +128,7 @@ def _batched_set_indices(num_sets, num_per_set, batch_size):
 
     batching_remainder = num_sets % batch_size
     num_sets_reduced = num_sets - batching_remainder
-    reduced_set_indices = shuffled_set_indices[:num_sets_reduced+1]
-
+    reduced_set_indices = shuffled_set_indices[:num_sets_reduced]
     set_indices_grid, event_indices_grid = meshgrid(reduced_set_indices, bootstrapped_event_indices, indexing='ij')
     batched_set_indices_grid = set_indices_grid.reshape(-1, batch_size, num_per_set)
     batched_event_indices_grid = event_indices_grid.reshape(-1, batch_size, num_per_set)

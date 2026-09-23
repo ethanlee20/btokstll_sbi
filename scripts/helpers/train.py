@@ -10,6 +10,12 @@ from .dataloader import SetDataLoader
 from .dataset import Dataset
 
 
+import pandas
+import matplotlib
+import numpy
+import torch
+
+
 def _train_batch(
     features: Tensor,
     labels: Tensor,
@@ -52,7 +58,7 @@ def _val_batch(
 
 
 def _train_epoch(
-    data_loader: DataLoader,
+    data_loader: SetDataLoader,
     model: Module,
     loss_fn,
     optimizer: Optimizer,
@@ -81,7 +87,7 @@ def _train_epoch(
 def _val_epoch(
     data_loader: SetDataLoader, 
     model: Module, 
-    loss_fn
+    loss_fn,
 ) -> Tensor:
 
     device = get_model_device(model)
@@ -93,7 +99,6 @@ def _val_epoch(
 
     num_batches = len(data_loader)
     avg_batch_loss = cum_loss / num_batches
-
     return avg_batch_loss
 
 
@@ -142,6 +147,7 @@ def train_val(
     val_data_loader: SetDataLoader | None = None,
     lr_scheduler: None | LRScheduler = None,
 ) -> DataFrame | Series:
+
     losses = []
     for ep in range(num_epochs):
         epoch_losses = _train_val_epoch(
@@ -154,32 +160,35 @@ def train_val(
         )
         losses.append(epoch_losses)
         print(f"Epoch {ep}: Train: {epoch_losses['train'].item():.4g}, Val: {epoch_losses['val'].item():.4g}")
+
     losses = concat(losses, ignore_index=True)
     return losses
 
 
-# def train_val_datasets(
-#     train_dataset: Dataset,
-#     train_batch_size: int,
-#     model: Module,
-#     loss_fn,
-#     optimizer: Optimizer,
-#     num_epochs: int,
-#     val_dataset: Dataset | None = None,
-#     val_batch_size: int | None = None,
-#     lr_scheduler: None | LRScheduler = None,
-# ) -> DataFrame | Series:
-#     train_data_loader = DataLoader(train_dataset, train_batch_size)
-#     eval_data_loader = (
-#         DataLoader(eval_dataset, eval_batch_size) if eval_dataset is not None else None
-#     )
-#     losses = run_training(
-#         train_data_loader,
-#         model,
-#         loss_fn,
-#         optimizer,
-#         num_epochs,
-#         eval_data_loader=eval_data_loader,
-#         lr_scheduler=lr_scheduler,
-#     )
-#     return losses
+"""
+        labels = []
+        mles = []
+        confs = []
+        for trial_num in range(100):
+            df_val_set = df_val_sets.xs(trial_num, level="trial_num")
+            label = df_val_set["dC_9"].unique()
+            #if label <= 1 and label >= -2:
+            features = df_val_set[feature_cols]
+            mle, conf = get_mle_and_conf(model, features, -5, 2, 100)
+            labels.append(label)
+            mles.append(mle)
+            confs.append(conf)
+        labels = numpy.array(labels)
+        mles = numpy.array(mles)
+        confs = numpy.array(confs)
+
+        fig, ax = matplotlib.pyplot.subplots()
+        ax.plot([-5, 2], [-5, 2], color="#377eb8", label="Ideal", zorder=-100)
+        ax.scatter(labels, mles, color="#ff7f00")
+        ax.vlines(labels, confs[:,0], confs[:, 1], color='#4daf4a', linestyle="-", zorder=-101, label=r"Log Likelihood $1\sigma$")
+        ax.set_ylabel(r"Predicted $\delta C_9$", fontsize=16)
+        ax.set_xlabel(r"True $\delta C_9$", fontsize=16)
+        ax.legend()
+        fig.savefig("plots/lin.png", bbox_inches="tight")
+        matplotlib.pyplot.close()
+"""
