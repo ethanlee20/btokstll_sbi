@@ -39,16 +39,16 @@ def run_training():
         [trial.values for _, trial in grouped_parameterized_data_data_frame]
     )
 
-    parameterized_data_as_sets_ndarray = parameterized_data_as_sets_ndarray_[:, :50_000, :]
+    parameterized_data_as_sets_ndarray = parameterized_data_as_sets_ndarray_.copy()
 
     # reference_data_as_sets_ndarray = reference_data_data_frame.values.reshape(
     #     parameterized_data_as_sets_ndarray.shape
     # )
 
-    reference_data_as_sets_ndarray = parameterized_data_as_sets_ndarray_[:, 50_000:, :]
+    reference_data_as_sets_ndarray = parameterized_data_as_sets_ndarray_.copy()
     
     reference_data_as_sets_ndarray[:, :, 4] = parameterized_data_as_sets_ndarray[:, :, 4]
-    breakpoint()
+    # breakpoint()
     numpy.random.shuffle(reference_data_as_sets_ndarray[:,:,4])
 
     reference_data_as_sets_labels_ndarray = numpy.zeros(len(reference_data_as_sets_ndarray))
@@ -67,14 +67,15 @@ def run_training():
     set_labels_train_ndarray = set_labels_ndarray[train_indices]
     sets_val_ndarray = sets_ndarray[val_indices]
     set_labels_val_ndarray = set_labels_ndarray[val_indices]
-
+    # breakpoint()
     sets_train_tensor = torch.from_numpy(sets_train_ndarray)
     set_labels_train_tensor = torch.from_numpy(set_labels_train_ndarray)
     sets_val_tensor = torch.from_numpy(sets_val_ndarray)
     set_labels_val_tensor = torch.from_numpy(set_labels_val_ndarray)
 
-    train_dataloader = SetDataLoader(sets_train_tensor, set_labels_train_tensor, batch_size=32)
-    val_dataloader = SetDataLoader(sets_val_tensor, set_labels_val_tensor, batch_size=32)
+    # train_dataloader = SetDataLoader(sets_train_tensor, set_labels_train_tensor, batch_size=32)
+    train_dataloader = SetDataLoader(torch.from_numpy(sets_ndarray), torch.from_numpy(set_labels_ndarray), batch_size=32)
+    # val_dataloader = SetDataLoader(sets_val_tensor, set_labels_val_tensor, batch_size=32)
 
     train_means = sets_train_tensor.mean(axis=(0,1))
     train_stds = sets_train_tensor.std(axis=(0,1))
@@ -95,7 +96,7 @@ def run_training():
         loss_fn=loss_fn,
         optimizer=optimizer,
         num_epochs=num_epochs,
-        val_data_loader=val_dataloader,
+        # val_data_loader=val_dataloader,
         lr_scheduler=lr_scheduler
     )
 
@@ -121,7 +122,7 @@ def run_evaluation():
     model = model.to("cuda")
     model.eval()
 
-    val_2_sets_data_frame = pandas.read_parquet("data/train_vary/combo.parquet")
+    val_2_sets_data_frame = pandas.read_parquet("data/val_sets/combo.parquet")
 
     true_values = []
     mle_xs = []
@@ -130,7 +131,7 @@ def run_evaluation():
     parameters = []
     ratios = []
 
-    for trial_num in range(200):
+    for trial_num in range(100):
         val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num").iloc[:16000]
         true_value = val_2_set_data_frame["dC_9"].unique()
         features = torch.from_numpy(val_2_set_data_frame[feature_columns].values.copy()).unsqueeze(0).to(dtype=torch.float32, device="cuda")
@@ -168,5 +169,5 @@ def run_evaluation():
     save_fig_and_close(fig, "plots/ratios.png")
 
 
-run_training()
+# run_training()
 run_evaluation()

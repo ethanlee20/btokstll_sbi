@@ -1,5 +1,5 @@
 
-from torch import Tensor, tensor, max, sum, ones, zeros, mean, linspace, nonzero
+from torch import Tensor, tensor, max, sum, ones, zeros, mean, linspace, nonzero, exp
 from torch.nn import (
     Module, 
     ReLU, 
@@ -52,7 +52,7 @@ class MLP(Module):
             log_ratio_sum = self(x)
             ratios.append(log_ratio_sum.detach())
         ratios = tensor(ratios)
-        return parameters, ratios
+        return parameters, exp(ratios)
 
     def mle_and_confidence_interval(self, scan_min, scan_max, scan_num, x):
         parameters, ratios = self.scan_likelihood_ratio(scan_min, scan_max, scan_num, x)

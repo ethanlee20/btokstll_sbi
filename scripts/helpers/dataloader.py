@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from torch import Tensor, reshape, arange, randperm, meshgrid, randint
 
-#from helpers.util import shuffle_tensor
+from helpers.util import shuffle_tensor
 #from helpers.dataset import Dataset
 
 
@@ -41,6 +41,9 @@ class SetDataLoader:
 
         feature_batch_indices = (indices[self.batch_index] for indices in self.feature_indices)
         label_batch_indices = self.label_indices[self.batch_index]
+        
+        # breakpoint()
+        self.features[self.labels == 0, :, 4] = shuffle_tensor(self.features[self.labels == 0, :, 4])
 
         batch_features = self.features[*feature_batch_indices]
         batch_labels = self.labels[label_batch_indices]
@@ -62,7 +65,7 @@ class SetDataLoader:
 #            len(self.dataset), self.batch_size, self.shuffle
 #        )
 #
-#    def __len__(
+#    def __len__( 
 #        self,
 #    ):
 #        return len(self.batched_indices)

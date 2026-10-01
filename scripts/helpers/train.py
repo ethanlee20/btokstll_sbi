@@ -159,7 +159,10 @@ def train_val(
             lr_scheduler=lr_scheduler,
         )
         losses.append(epoch_losses)
-        print(f"Epoch {ep}: Train: {epoch_losses['train'].item():.4g}, Val: {epoch_losses['val'].item():.4g}")
+        if val_data_loader is not None:
+            print(f"Epoch {ep}: Train: {epoch_losses['train'].item():.4g}, Val: {epoch_losses['val'].item():.4g}")
+        else:  
+            print(f"Epoch {ep}: Train: {epoch_losses.item():.4g}")
 
     losses = concat(losses, ignore_index=True)
     return losses
