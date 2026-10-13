@@ -105,8 +105,8 @@ def plot_log_likelihood_ratio_scan(
 def plot_linearity(ax, predictions, true_values, error_bars, lim,):
 
     ax.plot(lim, lim, color="#377eb8", label="Ideal", zorder=-100)
-    ax.scatter(true_values, predictions, color="#ff7f00")
-    ax.vlines(true_values, error_bars[:,0], error_bars[:, 1], color='#4daf4a', linestyle="-", zorder=-101, label=r"Log Likelihood $1\sigma$")
+    ax.scatter(true_values, predictions, color="#ff7f00", zorder=-50)
+    ax.vlines(true_values, error_bars[:,0], error_bars[:, 1], color='#479f44', linestyle="-", zorder=0, label=r"68\% Confidence Interval")
     ax.set_ylabel(r"Predicted $\delta C_9$", fontsize=16)
     ax.set_xlabel(r"True $\delta C_9$", fontsize=16)
-    ax.legend()
+    ax.legend(loc="upper left")

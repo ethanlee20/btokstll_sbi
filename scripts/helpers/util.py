@@ -3,7 +3,7 @@ from pathlib import Path
 from json import load
 
 from pandas import DataFrame, Series, Index
-from torch import cuda, device, Tensor, randperm, from_numpy, stack, all
+from torch import cuda, device, Tensor, randperm, from_numpy, stack, all, randint
 from torch.nn import Module
 
 
@@ -51,11 +51,18 @@ def shuffle_pandas(
     return a_shuf
 
 
-def shuffle_tensor(a: Tensor) -> Tensor:
-    num_rows = len(a)
-    shuffled_indices = randperm(num_rows)
-    a = a[shuffled_indices]
-    return a
+def shuffle_tensor(a: Tensor, dim=0) -> Tensor:
+    num_elements = a.shape[dim]
+    shuffled_indices = randperm(num_elements)
+    out = a.index_select(dim, shuffled_indices)
+    return out
+
+
+def bootstrap_tensor(a: Tensor, dim=0) -> Tensor:
+    num_elements = a.shape[dim]
+    bootstrapped_indices = randint(high=num_elements, size=(num_elements,), device=a.device)
+    out = a.index_select(dim, bootstrapped_indices)
+    return out
 
 
 def pandas_from_tensor(t: Tensor, names: str | list[str]) -> DataFrame | Series:

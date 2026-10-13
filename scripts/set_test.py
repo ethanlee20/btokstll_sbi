@@ -15,6 +15,7 @@ from helpers.plot import (
     plot_linearity, 
     plot_log_likelihood_ratio_scan
 )
+from helpers.util import shuffle_tensor, bootstrap_tensor
 from helpers.train import train_val
 from helpers.dataloader import SetDataLoader
 from helpers.set_model import MLP
@@ -27,11 +28,9 @@ model_path = "models/model.pt"
 
 feature_columns = ["q_sq", "cos_theta_lepton", "cos_theta_k", "chi", "dC_9"]
 
+
 def run_training():
 
-    # index = numpy.random.permutation(200)
-
-    # reference_data_data_frame = pandas.read_parquet("data/train_sm/combo.parquet")[feature_columns]
     parameterized_data_data_frame = pandas.read_parquet("data/train_vary/combo.parquet")[feature_columns]
 
     grouped_parameterized_data_data_frame = parameterized_data_data_frame.groupby(level="trial_num")
@@ -41,14 +40,10 @@ def run_training():
 
     parameterized_data_as_sets_ndarray = parameterized_data_as_sets_ndarray_.copy()
 
-    # reference_data_as_sets_ndarray = reference_data_data_frame.values.reshape(
-    #     parameterized_data_as_sets_ndarray.shape
-    # )
-
     reference_data_as_sets_ndarray = parameterized_data_as_sets_ndarray_.copy()
     
     reference_data_as_sets_ndarray[:, :, 4] = parameterized_data_as_sets_ndarray[:, :, 4]
-    # breakpoint()
+
     numpy.random.shuffle(reference_data_as_sets_ndarray[:,:,4])
 
     reference_data_as_sets_labels_ndarray = numpy.zeros(len(reference_data_as_sets_ndarray))
@@ -67,13 +62,12 @@ def run_training():
     set_labels_train_ndarray = set_labels_ndarray[train_indices]
     sets_val_ndarray = sets_ndarray[val_indices]
     set_labels_val_ndarray = set_labels_ndarray[val_indices]
-    # breakpoint()
+
     sets_train_tensor = torch.from_numpy(sets_train_ndarray)
     set_labels_train_tensor = torch.from_numpy(set_labels_train_ndarray)
     sets_val_tensor = torch.from_numpy(sets_val_ndarray)
     set_labels_val_tensor = torch.from_numpy(set_labels_val_ndarray)
 
-    # train_dataloader = SetDataLoader(sets_train_tensor, set_labels_train_tensor, batch_size=32)
     train_dataloader = SetDataLoader(torch.from_numpy(sets_ndarray), torch.from_numpy(set_labels_ndarray), batch_size=32)
     # val_dataloader = SetDataLoader(sets_val_tensor, set_labels_val_tensor, batch_size=32)
 
@@ -116,7 +110,7 @@ def run_training():
 
 
 def run_evaluation():
-
+    """
     model = MLP()
     model.load_state_dict(torch.load("models/model.pt", weights_only=True))
     model = model.to("cuda")
@@ -124,49 +118,80 @@ def run_evaluation():
 
     val_2_sets_data_frame = pandas.read_parquet("data/val_sets/combo.parquet")
 
-    true_values = []
-    mle_xs = []
-    mle_ys = []
-    confidence_intervals = []
-    parameters = []
-    ratios = []
+    def bootstrap_conf(features, model, num_bootstraps=10):
+        
+        mle, _, _, _, _ = model.mle_and_confidence_interval(-5, 2, 100, features)
 
+        bootstrapped_mles = []
+        for _ in range(num_bootstraps):
+            bootstrapped_features = bootstrap_tensor(features, dim=1)
+            bootstrapped_mle, _, _, _, _ = model.mle_and_confidence_interval(-5, 2, 100, bootstrapped_features)
+            bootstrapped_mles.append(bootstrapped_mle)
+        bootstrapped_mles = numpy.array(bootstrapped_mles)
+
+        percentile = 0.68
+        alpha = 1 - percentile
+
+        mles_quantile_a = numpy.quantile(bootstrapped_mles, 1 - alpha/2)
+        mles_quantile_b = numpy.quantile(bootstrapped_mles, alpha/2)
+
+        a = 2 * mle - mles_quantile_a
+        b = 2 * mle - mles_quantile_b
+
+        conf_interval = numpy.array([a,b])
+
+        return mle, conf_interval
+
+
+    true_values = []
+    confidence_intervals = []
+    mles = []
+    
     for trial_num in range(100):
-        val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num").iloc[:16000]
+        val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num")
         true_value = val_2_set_data_frame["dC_9"].unique()
         features = torch.from_numpy(val_2_set_data_frame[feature_columns].values.copy()).unsqueeze(0).to(dtype=torch.float32, device="cuda")
-        mle_x, mle_y, confidence_interval, parameters_, ratios_ = model.mle_and_confidence_interval(-5, 2, 100, features)
+        mle, conf = bootstrap_conf(features, model, num_bootstraps=100)
         true_values.append(true_value)
-        mle_xs.append(mle_x)
-        mle_ys.append(mle_y)
-        confidence_intervals.append(confidence_interval)
-        parameters.append(parameters_)
-        ratios.append(ratios_)
+        mles.append(mle)
+        confidence_intervals.append(conf)
         
     true_values = numpy.array(true_values)
-    mle_xs = numpy.array(mle_xs)
-    mle_ys = numpy.array(mle_ys)
+    mles = numpy.array(mles)
     confidence_intervals = numpy.array(confidence_intervals)
-    parameters = numpy.array(parameters)
-    ratios = numpy.array(ratios)
 
+    numpy.savez(
+        "results/linearity.npz", 
+        true_values=true_values, 
+        mles=mles, 
+        confidence_intervals=confidence_intervals
+    )
+
+    """
+    linearity_result = numpy.load("results/linearity.npz")
     fig, ax = matplotlib.pyplot.subplots()
-    plot_linearity(ax, mle_xs, true_values, confidence_intervals, lim=(-5, 2))
+    plot_linearity(
+        ax, 
+        linearity_result["mles"], 
+        linearity_result["true_values"], 
+        linearity_result["confidence_intervals"], 
+        lim=(-5, 2)
+    )
     save_fig_and_close(fig, "plots/lin.png")
 
-    fig, ax = matplotlib.pyplot.subplots()
-    for color, i in zip(color_blind_palette, range(9)):
-        plot_log_likelihood_ratio_scan(
-            ax,
-            parameters[i],
-            ratios[i],
-            mle_xs[i],
-            mle_ys[i],
-            confidence_intervals[i],
-            true_values[i],
-            color
-        )
-    save_fig_and_close(fig, "plots/ratios.png")
+    #fig, ax = matplotlib.pyplot.subplots()
+    #for color, i in zip(color_blind_palette, range(9)):
+    #    plot_log_likelihood_ratio_scan(
+    #        ax,
+    #        parameters[i],
+    #        ratios[i],
+    #        mle_xs[i],
+    #        mle_ys[i],
+    #        confidence_intervals[i],
+    #        true_values[i],
+    #        color
+    #    )
+    #save_fig_and_close(fig, "plots/ratios.png")
 
 
 # run_training()
