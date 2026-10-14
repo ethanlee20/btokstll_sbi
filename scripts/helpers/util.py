@@ -55,6 +55,7 @@ def shuffle_tensor(a: Tensor, dim=0) -> Tensor:
     num_elements = a.shape[dim]
     shuffled_indices = randperm(num_elements)
     out = a.index_select(dim, shuffled_indices)
+    out = out.detach().clone()
     return out
 
 

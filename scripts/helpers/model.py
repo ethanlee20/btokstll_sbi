@@ -10,16 +10,13 @@ class MLP(Module):
     def __init__(self):
         super().__init__()
         self.layers = Sequential(
-            Linear(5, 500),
+            Linear(5, 100),
             ReLU(),
-            # Dropout(p=0.1),
-            Linear(500, 500),
+            Linear(100, 100),
             ReLU(),
-            Dropout(p=0.2),
-            Linear(500, 500),
+            Linear(100, 100),
             ReLU(),
-            Dropout(p=0.2),
-            Linear(500, 1),
+            Linear(100, 1),
         )
 
         self.train_means = Buffer(zeros(5))

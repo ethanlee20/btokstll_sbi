@@ -15,8 +15,8 @@ from helpers.plot import (
     plot_log_likelihood_ratio_scan
 )
 from helpers.train import train_val
-from helpers.dataloader import SetDataLoader
-from helpers.set_model import MLP
+from helpers.dataloader import DataLoader
+from helpers.model import MLP
 
 
 turn_on_hq_plots()
@@ -25,6 +25,7 @@ turn_on_dark_plots()
 model_path = "models/model.pt"
 
 feature_columns = ["q_sq", "cos_theta_lepton", "cos_theta_k", "chi", "dC_9"]
+
 
 def run_training():
 

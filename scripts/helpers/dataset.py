@@ -1,3 +1,4 @@
+from math import floor
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -9,53 +10,90 @@ from .util import tensor_from_pandas, group
 
 @dataclass
 class Dataset:
-    features: Tensor
-    labels: Tensor | None = None
+    observables: Tensor
+    parameters : Tensor | None = None
 
     def __post_init__(self):
-        self.assert_reasonable()
+        self._assert_reasonable()
 
     def __len__(self) -> int:
-        self.assert_reasonable()
-        return len(self.features)
+        self._assert_reasonable()
+        return len(self.observables)
 
     def _assert_reasonable(self):
-        if self.labels is not None:
-            assert len(self.features) == len(self.labels)
+        assert len(self.observables) == len(self.parameters)
+
+    @classmethod
+    def from_pandas(cls, observables, parameters, dtype="float32"):
+        observables = tensor_from_pandas(observables, dtype=dtype) 
+        parameters = tensor_from_pandas(parameters, dtype=dtype) 
+        out = cls(observables=observables, parameters=parameters)
+        return out
+
+    def iloc(self, start, stop):
+        observables = self.observables[start:stop]
+        parameters = self.parameters[start:stop]
+        out = Dataset(observables=observables, parameters=parameters)
+        return out 
+
+    def copy(self):
+        observables = self.observables.detach().clone()
+        parameters = self.parameters.detach().clone()
+        out = Dataset(observables=observables, parameters=parameters)
+        return out
+
+    def train_val_split(self, val_frac): 
+        num_total = len(self)
+        num_val = floor(num_total * val_frac)
+        val = self.iloc(0, num_val).copy()
+        train = self.iloc(num_val, num_total).copy()
+        return train, val
+
+    def means(self):
+        observables_mean = self.observables.mean(dim=0)
+        parameters_mean = self.parameters.mean(dim=0)
+        out = cat([observables_mean, parameters_mean], dim=0)
+        return out
+
+    def stdevs(self):
+        observables_stdev = self.observables.std(dim=0)
+        parameters_stdev = self.parameters.std(dim=0)
+        out = cat([observables_stdev, parameters_stdev], dim=0)
+        return out
 
 
-def _check_all_labeled(datasets: list[Dataset]) -> bool:
-    assert datasets
-    labels_set = set([d.labels for d in datasets])
-    if None in labels_set:
-        return False
-    return True
+# def _check_all_labeled(datasets: list[Dataset]) -> bool:
+#     assert datasets
+#     labels_set = set([d.labels for d in datasets])
+#     if None in labels_set:
+#         return False
+#     return True
 
 
-def _check_some_labeled_some_not(datasets: list[Dataset]) -> bool:
-    assert datasets
-    labels_set = set([d.labels for d in datasets])
-    if len(labels_set) > 1 and None in labels_set:
-        return True
-    return False
+# def _check_some_labeled_some_not(datasets: list[Dataset]) -> bool:
+#     assert datasets
+#     labels_set = set([d.labels for d in datasets])
+#     if len(labels_set) > 1 and None in labels_set:
+#         return True
+#     return False
 
 
-def concat_datasets(datasets: list[Dataset]) -> Dataset:
-    some_labeled_some_not = _check_some_labeled_some_not(datasets)
-    if some_labeled_some_not:
-        raise ValueError("Datasets must be either all labeled or all unlabeled.")
-    
-    combined_features = cat([d.features for d in datasets])
-    all_labeled = _check_all_labeled(datasets)
-    if all_labeled:
-        combined_labels = cat([d.labels for d in datasets])
-
-    combined = (
-        Dataset(features=combined_features, labels=combined_labels)
-        if all_labeled
-        else Dataset(combined_features)
-    )
-    return combined
+# def concat_datasets(datasets: list[Dataset]) -> Dataset:
+#     some_labeled_some_not = _check_some_labeled_some_not(datasets)
+#     if some_labeled_some_not:
+#         raise ValueError("Datasets must be either all labeled or all unlabeled.")
+#     
+#     combined_features = cat([d.features for d in datasets])
+#     all_labeled = _check_all_labeled(datasets)
+#     if all_labeled:
+#         combined_labels = cat([d.labels for d in datasets])
+# 
+#     combined = (
+#         Dataset(features=combined_features, labels=combined_labels)
+#         if all_labeled
+#         else Dataset(combined_features)
+#     )
+#     return combined
 
 
 # def dataset_from_pandas(
