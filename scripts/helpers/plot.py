@@ -87,24 +87,27 @@ def plot_log_likelihood_ratio_scan(
     ax: Axes,
     parameters: ArrayLike,
     log_probabilities: ArrayLike,
-    mle_x, 
-    mle_y,
-    confidence_interval,
-    true_value: float,
     color: str,
+    mle_x=None, 
+    mle_y=None,
+    confidence_interval=None,
+    true_value:float|None=None,
 ):
     ax.plot(parameters, log_probabilities, color=color)
-    ax.axvline(true_value, color=color, linestyle="--", zorder=-100)
-    ax.scatter(mle_x, mle_y, color=color, s=25, zorder=100)
-    ax.hlines(mle_y, confidence_interval[0], confidence_interval[-1], color=color, linestyle="--", zorder=-101)
-
+    if true_value is not None:
+        ax.axvline(true_value, color=color, linestyle="--", zorder=-100)
+    if mle_x is not None and mle_y is not None:
+        ax.scatter(mle_x, mle_y, color=color, s=25, zorder=100)
+    if confidence_interval is not None:
+        ax.hlines(mle_y, confidence_interval[0], confidence_interval[-1], color=color, linestyle="--", zorder=-101)
     ax.set_ylabel(r"$\log p(\textrm{data} \;|\; \delta C_9) + c$", fontsize=15)
     ax.set_xlabel(r"$\delta C_9$", fontsize=15)    
 
 
 def plot_linearity(ax, predictions, true_values, error_bars, lim,):
-
     ax.plot(lim, lim, color="#377eb8", label="Ideal", zorder=-100)
+    ax.set_xlim(lim)
+    ax.set_ylim(lim)
     ax.scatter(true_values, predictions, color="#ff7f00", zorder=-50)
     ax.vlines(true_values, error_bars[:,0], error_bars[:, 1], color='#479f44', linestyle="-", zorder=0, label=r"68\% Confidence Interval")
     ax.set_ylabel(r"Predicted $\delta C_9$", fontsize=16)

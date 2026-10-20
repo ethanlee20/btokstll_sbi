@@ -57,7 +57,7 @@ def run_training():
     loss_fn = torch.nn.BCEWithLogitsLoss()
     lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
-    num_epochs = 100
+    num_epochs = 300
 
     losses = train_val(
         train_data_loader=train_dataloader,
@@ -117,7 +117,7 @@ def run_evaluation():
 
         return mle, conf_interval
 
-
+    
     true_values = []
     confidence_intervals = []
     mles = []
@@ -154,20 +154,21 @@ def run_evaluation():
     )
     save_fig_and_close(fig, "plots/lin.png")
 
-    #fig, ax = matplotlib.pyplot.subplots()
-    #for color, i in zip(color_blind_palette, range(9)):
-    #    plot_log_likelihood_ratio_scan(
-    #        ax,
-    #        parameters[i],
-    #        ratios[i],
-    #        mle_xs[i],
-    #        mle_ys[i],
-    #        confidence_intervals[i],
-    #        true_values[i],
-    #        color
-    #    )
-    #save_fig_and_close(fig, "plots/ratios.png")
+    fig, ax = matplotlib.pyplot.subplots()
+    for trial_num, color in zip((0, 4, 10), color_blind_palette):
+        val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num")
+        true_value = val_2_set_data_frame["dC_9"].unique()
+        features = torch.from_numpy(val_2_set_data_frame[observables + parameters].values.copy()).unsqueeze(0).to(dtype=torch.float32, device="cuda")
+        parameter_values, ratios = model.scan_likelihood_ratio(-5, 2, 100, features) 
+        plot_log_likelihood_ratio_scan(
+            ax,
+            parameter_values,
+            ratios,
+            color=color,
+            true_value=true_value
+        )
+    save_fig_and_close(fig, "plots/ratios.png")
 
 
-# run_training()
+run_training()
 run_evaluation()

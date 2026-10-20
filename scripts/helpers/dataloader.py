@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from torch import Tensor, reshape, arange, randperm, meshgrid, randint, zeros, hstack, cat, float32
 
-from helpers.util import shuffle_tensor
+from helpers.util import shuffle_tensor, bootstrap_tensor
 from helpers.dataset import Dataset
 
 
@@ -78,7 +78,7 @@ def _batched_set_indices(num_sets, num_per_set, batch_size):
 
 
 @dataclass
-class EventDataLoader:
+class NRE_A_EventDataLoader:
 
     dataset: Dataset
     batch_size: int
@@ -105,19 +105,19 @@ class EventDataLoader:
             raise StopIteration
 
         batch_indices = self.batched_indices[self.index]
-        batch_observables = self.dataset.observables[batch_indices]
+        batch_features = self.dataset.features[batch_indices]
         batch_joint_parameters = self.dataset.parameters[batch_indices]
         batch_marginal_parameters = shuffle_tensor(batch_joint_parameters)
 
         joint = hstack(
             [
-                batch_observables.detach().clone(),
+                batch_features.detach().clone(),
                 batch_joint_parameters,
             ]
         )
         marginal = hstack(
             [
-                batch_observables.detach().clone(),
+                batch_features.detach().clone(),
                 batch_marginal_parameters,
             ]
         )
@@ -128,6 +128,66 @@ class EventDataLoader:
 
         self.index += 1
         return data, is_joint
+
+
+@dataclass
+class NRE_C_EventDataLoader:
+    dataset: Dataset
+    batch_size: int
+    K: int
+    shuffle: bool = True
+    batched_indices: Tensor = field(init=False)
+
+    def __post_init__(self):
+        self.batched_indices = _make_batched_indices(
+            len(self.dataset), self.batch_size, self.shuffle
+        )
+
+    def __len__(self):
+        return self.num_batches
+
+    def __iter__(self):
+        self.index = 0
+        return self
+
+    def __next__(self):
+        if self.index >= len(self):
+            self.batched_indices = _make_batched_indices(
+                len(self.dataset), self.batch_size, self.shuffle
+            )
+            raise StopIteration
+
+        def make_batch(features, parameters):
+            assert len(parameters) == len(features)
+            batch_size = len(parameters)
+            marginal_parameters = bootstrap_tensor(
+                parameters, num=2*batch_size*self.K
+            )
+            marginal_parameters = marginal_parameters.reshape(
+                (2*batch_size, self.K, -1)
+            )
+            batch_parameters = marginal_parameters.detach().clone()
+            batch_parameters[0:batch_size, self.K-1] = parameters.squeeze()
+            batch_features = features.tile((2,1))
+            batch_features = batch_features.unsqueeze(dim=1).expand(-1, self.K, -1)
+            assert equal(batch_features.shape[:-1], batch_parameters.shape[:-1])
+            is_joint = zeros(len(batch_features), dtype=float32)  
+            is_joint[0:batch_size] = 1
+            is_joint = is_joint.unsqueeze(dim=-1)
+            return batch_parameters, batch_features, is_joint
+        
+        batch_indices = self.batched_indices[self.index]
+        batch_features = self.dataset.features[batch_indices]
+        batch_parameters = self.dataset.parameters[batch_indices]
+   
+        data, is_joint = make_batch(batch_features, batch_parameters)
+
+        self.index += 1
+        return data, is_joint
+
+    @property
+    def num_batches(self,):
+        return len(self.batched_indices) 
 
 
 def _make_batched_indices(

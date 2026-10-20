@@ -1,5 +1,17 @@
 
-from torch import Tensor, tensor, max, sum, ones, zeros, mean, linspace, nonzero, exp
+from torch import (
+    Tensor, 
+    tensor, 
+    max, 
+    sum, 
+    ones, 
+    zeros, 
+    mean, 
+    linspace, 
+    nonzero, 
+    exp, 
+    cat
+)
 from torch.nn import (
     Module, 
     ReLU, 
@@ -12,10 +24,13 @@ from torch.nn.parameter import Buffer
 
 
 class MLP(Module):
-    def __init__(self):
+    def __init__(self, param_size:int, feature_size:int):
         super().__init__()
+        self.param_size = param_size
+        self.feature_size = feature_size
+        self.input_size = param_size + feature_size
         self.layers = Sequential(
-            Linear(5, 100),
+            Linear(self.input_size, 100),
             ReLU(),
             Linear(100, 100),
             ReLU(),
@@ -23,48 +38,49 @@ class MLP(Module):
             ReLU(),
             Linear(100, 1),
         )
-        self.train_means = Buffer(zeros(5))
-        self.train_stds = Buffer(ones(5))
+        self.train_means = Buffer(zeros(self.input_size))
+        self.train_stds = Buffer(ones(self.input_size))
 
-    def forward(self, x):
-        rescaled_x = self.std_scale(x) 
-        out = self.layers(rescaled_x)
+    def forward(self, params:Tensor, features:Tensor): 
+        input = self.create_input(params=params, features=features)
+        rescaled_input = self.std_scale(input) 
+        out = self.layers(rescaled_input)
+        return out
+    
+    def create_input(self, params:Tensor, features:Tensor):
+        assert params.shape[-1] == self.param_size
+        assert features.shape[-1] == self.feature_size
+        out = cat([params, features], dim=-1)
+        assert out.shape[-1] == self.input_size
         return out
 
-    def std_scale(self, x: Tensor):
-        out = (x - self.train_means) / self.train_stds
+    def std_scale(self, input: Tensor):
+        out = (input - self.train_means) / self.train_stds
         return out
     
     def set_std_scale(
         self, 
-        train_means: Tensor, 
-        train_stds: Tensor
+        train_params: Tensor,
+        train_features: Tensor,
     ):
+        train_input = self.create_input(params=train_params, features=train_features)
+        train_means = train_input.mean(dim=0)
+        train_stds = train_input.std(dim=0)
         self.train_means = Buffer(train_means)
         self.train_stds = Buffer(train_stds)
 
-    def scan_likelihood_ratio(self, scan_min, scan_max, scan_num, x):
-        parameters = linspace(scan_min, scan_max, scan_num)
-        ratios = []
-        for p in parameters:
-            x[:, :, 4] = p
-            log_ratio_sum = sum(self(x))
-            ratios.append(log_ratio_sum.detach())
-        ratios = tensor(ratios)
-        return parameters, ratios
+    def scan_likelihood_ratio(self, min, max, num, features):
+        parameters = linspace(min, max, num)
+        predictions = zeros_like(parameters)
+        for i in range(len(parameters)):
+            predictions[i] = sum(self(parameters[i], features)).detach()
+        return parameters, predictions
 
-    def mle_and_confidence_interval(self, scan_min, scan_max, scan_num, x):
+    def mle(self, scan_min, scan_max, scan_num, x):
         parameters, ratios = self.scan_likelihood_ratio(scan_min, scan_max, scan_num, x)
         mle_x = parameters[ratios.argmax()]
         mle_y = max(ratios)
-        parameters_within_confidence = parameters[nonzero(ratios > mle_y - 0.5, as_tuple=True)]        
-        confidence_interval = (
-            tensor(float['nan'], float['nan']) if parameters_within_confidence.size in (0, 1)
-            else tensor(
-                [parameters_within_confidence[0].item(), parameters_within_confidence[-1].item()]
-            )
-        )
-        return mle_x, mle_y, confidence_interval, parameters, ratios
+        return mle_x, mle_y
 
 
 

@@ -10,36 +10,36 @@ from .util import tensor_from_pandas, group
 
 @dataclass
 class Dataset:
-    observables: Tensor
-    parameters : Tensor | None = None
+    parameters : Tensor
+    features: Tensor
 
     def __post_init__(self):
         self._assert_reasonable()
 
     def __len__(self) -> int:
         self._assert_reasonable()
-        return len(self.observables)
+        return len(self.features)
 
     def _assert_reasonable(self):
-        assert len(self.observables) == len(self.parameters)
+        assert len(self.features) == len(self.parameters)
 
     @classmethod
-    def from_pandas(cls, observables, parameters, dtype="float32"):
-        observables = tensor_from_pandas(observables, dtype=dtype) 
+    def from_pandas(cls, parameters, features, dtype="float32"):
         parameters = tensor_from_pandas(parameters, dtype=dtype) 
-        out = cls(observables=observables, parameters=parameters)
+        features = tensor_from_pandas(features, dtype=dtype) 
+        out = cls(parameters=parameters, features=features)
         return out
 
     def iloc(self, start, stop):
-        observables = self.observables[start:stop]
         parameters = self.parameters[start:stop]
-        out = Dataset(observables=observables, parameters=parameters)
+        features = self.features[start:stop]
+        out = Dataset(parameters=parameters, features=features)
         return out 
 
     def copy(self):
-        observables = self.observables.detach().clone()
         parameters = self.parameters.detach().clone()
-        out = Dataset(observables=observables, parameters=parameters)
+        features = self.features.detach().clone()
+        out = Dataset(parameters=parameters, features=features)
         return out
 
     def train_val_split(self, val_frac): 
@@ -49,17 +49,6 @@ class Dataset:
         train = self.iloc(num_val, num_total).copy()
         return train, val
 
-    def means(self):
-        observables_mean = self.observables.mean(dim=0)
-        parameters_mean = self.parameters.mean(dim=0)
-        out = cat([observables_mean, parameters_mean], dim=0)
-        return out
-
-    def stdevs(self):
-        observables_stdev = self.observables.std(dim=0)
-        parameters_stdev = self.parameters.std(dim=0)
-        out = cat([observables_stdev, parameters_stdev], dim=0)
-        return out
 
 
 # def _check_all_labeled(datasets: list[Dataset]) -> bool:

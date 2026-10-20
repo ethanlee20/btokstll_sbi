@@ -59,10 +59,16 @@ def shuffle_tensor(a: Tensor, dim=0) -> Tensor:
     return out
 
 
-def bootstrap_tensor(a: Tensor, dim=0) -> Tensor:
+def bootstrap_tensor(a: Tensor, num=None, dim=0) -> Tensor:
     num_elements = a.shape[dim]
-    bootstrapped_indices = randint(high=num_elements, size=(num_elements,), device=a.device)
+    bootstrap_size = num_elements if num is None else num
+    bootstrapped_indices = randint(
+        high=num_elements, 
+        size=(bootstrap_size,), 
+        device=a.device
+    )
     out = a.index_select(dim, bootstrapped_indices)
+    out = out.detach().clone()
     return out
 
 
