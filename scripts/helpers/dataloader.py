@@ -1,7 +1,7 @@
 from math import floor
 from dataclasses import dataclass, field
 
-from torch import Tensor, reshape, arange, randperm, meshgrid, randint, zeros, hstack, cat, float32
+from torch import Tensor, reshape, arange, randperm, meshgrid, randint, zeros, hstack, cat, float32, equal
 
 from helpers.util import shuffle_tensor, bootstrap_tensor
 from helpers.dataset import Dataset
@@ -157,7 +157,7 @@ class NRE_C_EventDataLoader:
             )
             raise StopIteration
 
-        def make_batch(features, parameters):
+        def make_batch(parameters, features):
             assert len(parameters) == len(features)
             batch_size = len(parameters)
             marginal_parameters = bootstrap_tensor(
@@ -170,20 +170,23 @@ class NRE_C_EventDataLoader:
             batch_parameters[0:batch_size, self.K-1] = parameters.squeeze()
             batch_features = features.tile((2,1))
             batch_features = batch_features.unsqueeze(dim=1).expand(-1, self.K, -1)
-            assert equal(batch_features.shape[:-1], batch_parameters.shape[:-1])
+            assert batch_features.shape[:-1] == batch_parameters.shape[:-1]
             is_joint = zeros(len(batch_features), dtype=float32)  
             is_joint[0:batch_size] = 1
             is_joint = is_joint.unsqueeze(dim=-1)
             return batch_parameters, batch_features, is_joint
         
         batch_indices = self.batched_indices[self.index]
-        batch_features = self.dataset.features[batch_indices]
-        batch_parameters = self.dataset.parameters[batch_indices]
+        raw_batch_parameters = self.dataset.parameters[batch_indices]
+        raw_batch_features = self.dataset.features[batch_indices]
    
-        data, is_joint = make_batch(batch_features, batch_parameters)
+        batch_parameters, batch_features, is_joint = make_batch(
+            parameters=raw_batch_parameters, 
+            features=raw_batch_features
+        )
 
         self.index += 1
-        return data, is_joint
+        return batch_parameters, batch_features, is_joint
 
     @property
     def num_batches(self,):

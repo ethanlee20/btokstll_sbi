@@ -6,6 +6,7 @@ from torch import (
     sum, 
     ones, 
     zeros, 
+    zeros_like,
     mean, 
     linspace, 
     nonzero, 
@@ -24,11 +25,11 @@ from torch.nn.parameter import Buffer
 
 
 class MLP(Module):
-    def __init__(self, param_size:int, feature_size:int):
+    def __init__(self, parameter_size:int, feature_size:int):
         super().__init__()
-        self.param_size = param_size
+        self.parameter_size = parameter_size
         self.feature_size = feature_size
-        self.input_size = param_size + feature_size
+        self.input_size = parameter_size + feature_size
         self.layers = Sequential(
             Linear(self.input_size, 100),
             ReLU(),
@@ -41,16 +42,16 @@ class MLP(Module):
         self.train_means = Buffer(zeros(self.input_size))
         self.train_stds = Buffer(ones(self.input_size))
 
-    def forward(self, params:Tensor, features:Tensor): 
-        input = self.create_input(params=params, features=features)
+    def forward(self, parameters:Tensor, features:Tensor): 
+        input = self.create_input(parameters=parameters, features=features)
         rescaled_input = self.std_scale(input) 
         out = self.layers(rescaled_input)
         return out
     
-    def create_input(self, params:Tensor, features:Tensor):
-        assert params.shape[-1] == self.param_size
+    def create_input(self, parameters:Tensor, features:Tensor):
+        assert parameters.shape[-1] == self.parameter_size
         assert features.shape[-1] == self.feature_size
-        out = cat([params, features], dim=-1)
+        out = cat([parameters, features], dim=-1)
         assert out.shape[-1] == self.input_size
         return out
 
@@ -60,24 +61,24 @@ class MLP(Module):
     
     def set_std_scale(
         self, 
-        train_params: Tensor,
+        train_parameters: Tensor,
         train_features: Tensor,
     ):
-        train_input = self.create_input(params=train_params, features=train_features)
+        train_input = self.create_input(parameters=train_parameters, features=train_features)
         train_means = train_input.mean(dim=0)
         train_stds = train_input.std(dim=0)
         self.train_means = Buffer(train_means)
         self.train_stds = Buffer(train_stds)
 
-    def scan_likelihood_ratio(self, min, max, num, features):
-        parameters = linspace(min, max, num)
-        predictions = zeros_like(parameters)
+    def scan_over(self, parameters, features):
+        predictions = zeros(parameters.shape[0])
         for i in range(len(parameters)):
-            predictions[i] = sum(self(parameters[i], features)).detach()
-        return parameters, predictions
+            parameters_ = parameters[i].unsqueeze(dim=0).expand(features.shape[0], -1) 
+            predictions[i] = sum(self(parameters_, features)).detach()
+        return predictions
 
-    def mle(self, scan_min, scan_max, scan_num, x):
-        parameters, ratios = self.scan_likelihood_ratio(scan_min, scan_max, scan_num, x)
+    def mle(self, parameters, features):
+        ratios = self.scan_likelihood_ratio(parameters, features)
         mle_x = parameters[ratios.argmax()]
         mle_y = max(ratios)
         return mle_x, mle_y

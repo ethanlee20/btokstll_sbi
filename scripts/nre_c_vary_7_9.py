@@ -2,7 +2,7 @@
 
 import numpy
 import torch
-from torch import log, cat, logsumexp, mean, tensor
+from torch import log, cat, logsumexp, mean, tensor, cartesian_prod, linspace
 import matplotlib
 import pandas
 import sklearn
@@ -28,8 +28,8 @@ turn_on_dark_plots()
 model_path = "models/model_vary_7_9.pt"
 
 
-parameters = ["dC_7", "dC_9"]
-features = ["q_sq", "cos_theta_lepton", "cos_theta_k", "chi"]
+parameter_names = ["dC_7", "dC_9"]
+feature_names = ["q_sq", "cos_theta_lepton", "cos_theta_k", "chi"]
 
 def run_training():
 
@@ -37,12 +37,12 @@ def run_training():
     val_dataframe = pandas.read_parquet("data/vary_7_9/val/combo.parquet")
 
     train_dataset = Dataset.from_pandas(
-        parameters=train_dataframe[parameters],
-        features=train_dataframe[features], 
+        parameters=train_dataframe[parameter_names],
+        features=train_dataframe[feature_names], 
     )
     val_dataset = Dataset.from_pandas(
-        parameters=val_dataframe[parameters],
-        features=val_dataframe[features],
+        parameters=val_dataframe[parameter_names],
+        features=val_dataframe[feature_names],
     )
 
     gamma = 1
@@ -52,11 +52,11 @@ def run_training():
     val_dataloader = NRE_C_EventDataLoader(val_dataset, batch_size=100_000, K=K, shuffle=True)
 
     model = MLP(
-        param_size=len(parameters), 
-        feature_size=len(features)
+        parameter_size=len(parameter_names), 
+        feature_size=len(features_names)
     )
     model.set_std_scale(
-        train_params=train_dataset.parameters, 
+        train_parameters=train_dataset.parameters, 
         train_features=train_dataset.features
     )
     model = model.to('cuda')
@@ -128,12 +128,15 @@ def run_training():
 
 def run_evaluation():
     
-    model = MLP()
-    model.load_state_dict(torch.load("models/model.pt", weights_only=True))
+    model = MLP(
+        parameter_size=len(parameter_names), 
+        feature_size=len(feature_names)
+    )
+    model.load_state_dict(torch.load(model_path, weights_only=True))
     model = model.to("cuda")
     model.eval()
 
-    val_2_sets_data_frame = pandas.read_parquet("data/val_sets/combo.parquet")
+    val_sets_dataframe = pandas.read_parquet("data/vary_7_9/val_sets/combo.parquet")
 
     def bootstrap_conf(features, model, num_bootstraps=10):
         
@@ -160,57 +163,56 @@ def run_evaluation():
         return mle, conf_interval
 
     
-    true_values = []
-    confidence_intervals = []
-    mles = []
-    
-    for trial_num in range(0, 100, 2):
-        val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num")
-        true_value = val_2_set_data_frame["dC_9"].unique()
-        features = torch.from_numpy(val_2_set_data_frame[features + parameters].values.copy()).unsqueeze(0).to(dtype=torch.float32, device="cuda")
-        mle, conf = bootstrap_conf(features, model, num_bootstraps=100)
-        true_values.append(true_value)
-        mles.append(mle)
-        confidence_intervals.append(conf)
-        
-    true_values = numpy.array(true_values)
-    mles = numpy.array(mles)
-    confidence_intervals = numpy.array(confidence_intervals)
+    # true_values = []
+    # confidence_intervals = []
+    # mles = []
+    # 
+    # for trial_num in range(0, 100, 2):
+    #     val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num")
+    #     true_value = val_2_set_data_frame["dC_9"].unique()
+    #     features = torch.from_numpy(val_2_set_data_frame[features + parameters].values.copy()).unsqueeze(0).to(dtype=torch.float32, device="cuda")
+    #     mle, conf = bootstrap_conf(features, model, num_bootstraps=100)
+    #     true_values.append(true_value)
+    #     mles.append(mle)
+    #     confidence_intervals.append(conf)
+    #     
+    # true_values = numpy.array(true_values)
+    # mles = numpy.array(mles)
+    # confidence_intervals = numpy.array(confidence_intervals)
+# 
+    # numpy.savez(
+    #     "results/linearity.npz", 
+    #     true_values=true_values, 
+    #     mles=mles, 
+    #     confidence_intervals=confidence_intervals
+    # )
+# 
+    # 
+    # linearity_result = numpy.load("results/linearity.npz")
+    # fig, ax = matplotlib.pyplot.subplots()
+    # plot_linearity(
+    #     ax, 
+    #     linearity_result["mles"], 
+    #     linearity_result["true_values"], 
+    #     linearity_result["confidence_intervals"], 
+    #     lim=(-5, 2)
+    # )
+    # save_fig_and_close(fig, "plots/lin.png")
 
-    numpy.savez(
-        "results/linearity.npz", 
-        true_values=true_values, 
-        mles=mles, 
-        confidence_intervals=confidence_intervals
-    )
-
-    
-    linearity_result = numpy.load("results/linearity.npz")
-    fig, ax = matplotlib.pyplot.subplots()
-    plot_linearity(
-        ax, 
-        linearity_result["mles"], 
-        linearity_result["true_values"], 
-        linearity_result["confidence_intervals"], 
-        lim=(-5, 2)
-    )
-    save_fig_and_close(fig, "plots/lin.png")
-
-    fig, ax = matplotlib.pyplot.subplots()
     for trial_num, color in zip((0, 4, 10), color_blind_palette):
-        val_2_set_data_frame = val_2_sets_data_frame.xs(trial_num, level="trial_num")
-        true_value = val_2_set_data_frame["dC_9"].unique()
-        features = torch.from_numpy(val_2_set_data_frame[features + parameters].values.copy()).unsqueeze(0).to(dtype=torch.float32, device="cuda")
-        parameter_values, ratios = model.scan_likelihood_ratio(-5, 2, 100, features) 
-        plot_log_likelihood_ratio_scan(
-            ax,
-            parameter_values,
-            ratios,
-            color=color,
-            true_value=true_value
-        )
-    save_fig_and_close(fig, "plots/ratios.png")
+        fig, ax = matplotlib.pyplot.subplots()
+        set_dataframe = val_sets_dataframe.xs(trial_num, level="trial_num")
+        true_parameters = set_dataframe[parameter_names].drop_duplicates().values.copy().squeeze()
+        features = torch.from_numpy(set_dataframe[feature_names].values.copy()).to(dtype=torch.float32, device="cuda")
+        scan_size = 20
+        parameter_scan = cartesian_prod(linspace(-0.1, 0.1, scan_size), linspace(-2, 1, scan_size)).to(dtype=torch.float32, device="cuda")
+        ratios = model.scan_over(parameter_scan, features) 
+        plottable_parameter_scan = parameter_scan.reshape(scan_size, scan_size, -1).numpy(force=True)
+        plottable_ratios = ratios.reshape(scan_size, scan_size).numpy(force=True)
+        ax.pcolormesh(plottable_parameter_scan[:,:,0], plottable_parameter_scan[:, :, 1], plottable_ratios)
+        ax.scatter(*true_parameters)
+        save_fig_and_close(fig, f"plots/ratios_vary_7_9_{trial_num}.png")
 
 
-run_training()
-# run_evaluation()
+# run_training()
+run_evaluation()

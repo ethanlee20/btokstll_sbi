@@ -17,6 +17,7 @@ import torch
 
 
 def _train_batch(
+    parameters: Tensor,
     features: Tensor,
     labels: Tensor,
     model: Module,
@@ -26,11 +27,15 @@ def _train_batch(
 
     device = get_model_device(model)
 
+    parameters = parameters.to(device)
     features = features.to(device)
     labels = labels.to(device)
 
     model.train()
-    predictions = model(features)
+    predictions = model(
+        parameters=parameters, 
+        features=features
+    )
     train_loss = loss_fn(predictions, labels)
     train_loss.backward()
     optimizer.step()
@@ -39,6 +44,7 @@ def _train_batch(
 
 
 def _val_batch(
+    parameters: Tensor,
     features: Tensor,
     labels: Tensor,
     model: Module,
@@ -47,12 +53,16 @@ def _val_batch(
 
     device = get_model_device(model)
 
+    parameters = parameters.to(device)
     features = features.to(device)
     labels = labels.to(device)
 
     model.eval()
     with no_grad():
-        predictions = model(features)
+        predictions = model(
+            parameters=parameters, 
+            features=features
+        )
         eval_loss = loss_fn(predictions, labels)
     return eval_loss
 
@@ -68,8 +78,9 @@ def _train_epoch(
 
     cum_loss = zeros(1)
     cum_loss = cum_loss.to(device)
-    for features, labels in data_loader:
+    for parameters, features, labels in data_loader:
         batch_loss = _train_batch(
+            parameters,
             features,
             labels,
             model,
@@ -93,8 +104,8 @@ def _val_epoch(
     device = get_model_device(model)
 
     cum_loss = zeros(1).to(device)
-    for features, labels in data_loader:
-        batch_loss = _val_batch(features, labels, model, loss_fn)
+    for parameters, features, labels in data_loader:
+        batch_loss = _val_batch(parameters, features, labels, model, loss_fn)
         cum_loss += batch_loss
 
     num_batches = len(data_loader)
@@ -160,7 +171,10 @@ def train_val(
         )
         losses.append(epoch_losses)
         if val_data_loader is not None:
-            print(f"Epoch {ep}: Train: {epoch_losses['train'].item():.4g}, Val: {epoch_losses['val'].item():.4g}")
+            print(
+                f"Epoch {ep}: Train: {epoch_losses['train'].item():.4g}," 
+                f" Val: {epoch_losses['val'].item():.4g}"
+            )
         else:  
             print(f"Epoch {ep}: Train: {epoch_losses.item():.4g}")
 
