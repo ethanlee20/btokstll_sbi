@@ -53,7 +53,7 @@ def run_training():
 
     model = MLP(
         parameter_size=len(parameter_names), 
-        feature_size=len(features_names)
+        feature_size=len(feature_names)
     )
     model.set_std_scale(
         train_parameters=train_dataset.parameters, 
@@ -100,7 +100,7 @@ def run_training():
 
     lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
-    num_epochs = 300
+    num_epochs = 20
 
     losses = train_val(
         train_data_loader=train_dataloader,
@@ -109,7 +109,7 @@ def run_training():
         optimizer=optimizer,
         num_epochs=num_epochs,
         val_data_loader=val_dataloader,
-        lr_scheduler=lr_scheduler
+        lr_scheduler=None # lr_scheduler
     )
 
     torch.save(model.state_dict(), model_path)
@@ -204,15 +204,54 @@ def run_evaluation():
         set_dataframe = val_sets_dataframe.xs(trial_num, level="trial_num")
         true_parameters = set_dataframe[parameter_names].drop_duplicates().values.copy().squeeze()
         features = torch.from_numpy(set_dataframe[feature_names].values.copy()).to(dtype=torch.float32, device="cuda")
-        scan_size = 20
+        scan_size = 30
         parameter_scan = cartesian_prod(linspace(-0.1, 0.1, scan_size), linspace(-2, 1, scan_size)).to(dtype=torch.float32, device="cuda")
-        ratios = model.scan_over(parameter_scan, features) 
+        ratios = model.scan_over(parameters=parameter_scan, features=features) 
+        mle, _ = model.mle(parameters=parameter_scan, features=features)
         plottable_parameter_scan = parameter_scan.reshape(scan_size, scan_size, -1).numpy(force=True)
         plottable_ratios = ratios.reshape(scan_size, scan_size).numpy(force=True)
+        plottable_mle = mle.numpy(force=True)
         ax.pcolormesh(plottable_parameter_scan[:,:,0], plottable_parameter_scan[:, :, 1], plottable_ratios)
-        ax.scatter(*true_parameters)
+        ax.scatter(*true_parameters, label="Truth")
+        ax.scatter(*plottable_mle, label="MLE (Scan)")
+        ax.legend()
         save_fig_and_close(fig, f"plots/ratios_vary_7_9_{trial_num}.png")
 
+    c7_mles = []
+    c9_mles = []
+    true_parameters = []
+    fig, ax = matplotlib.pyplot.subplots()
+    for trial_num in range(50):
+        set_dataframe = val_sets_dataframe.xs(trial_num, level="trial_num")
+        true_parameter = set_dataframe[parameter_names].drop_duplicates().values.copy().squeeze()
+        features = torch.from_numpy(set_dataframe[feature_names].values.copy()).to(dtype=torch.float32, device="cuda")
+        scan_size = 50
+        parameter_scan = cartesian_prod(linspace(-0.1, 0.1, scan_size), linspace(-2, 1, scan_size)).to(dtype=torch.float32, device="cuda")
+        mle, _ = model.mle(parameters=parameter_scan, features=features)
+        c7_mles.append(mle[0].numpy(force=True))
+        c9_mles.append(mle[1].numpy(force=True))
+        true_parameters.append(true_parameter)
 
-# run_training()
+    true_parameters = numpy.array(true_parameters)
+    c7_mles = numpy.array(c7_mles)
+    c9_mles = numpy.array(c9_mles)
+
+    fig, ax = matplotlib.pyplot.subplots()
+    plot_linearity(
+        ax, 
+        c7_mles, 
+        true_parameters[:, 0]
+    )
+    save_fig_and_close(fig, "plots/lin_7.png")
+
+    fig, ax = matplotlib.pyplot.subplots()
+    plot_linearity(
+        ax, 
+        c9_mles, 
+        true_parameters[:, 1]
+    )
+    save_fig_and_close(fig, "plots/lin_9.png")
+    
+
+run_training()
 run_evaluation()

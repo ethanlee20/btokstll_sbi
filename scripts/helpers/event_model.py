@@ -31,13 +31,13 @@ class MLP(Module):
         self.feature_size = feature_size
         self.input_size = parameter_size + feature_size
         self.layers = Sequential(
-            Linear(self.input_size, 100),
+            Linear(self.input_size, 500),
             ReLU(),
-            Linear(100, 100),
+            Linear(500, 500),
             ReLU(),
-            Linear(100, 100),
+            Linear(500, 500),
             ReLU(),
-            Linear(100, 1),
+            Linear(500, 1),
         )
         self.train_means = Buffer(zeros(self.input_size))
         self.train_stds = Buffer(ones(self.input_size))
@@ -78,7 +78,7 @@ class MLP(Module):
         return predictions
 
     def mle(self, parameters, features):
-        ratios = self.scan_likelihood_ratio(parameters, features)
+        ratios = self.scan_over(parameters, features)
         mle_x = parameters[ratios.argmax()]
         mle_y = max(ratios)
         return mle_x, mle_y
