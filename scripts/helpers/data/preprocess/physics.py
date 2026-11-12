@@ -1,4 +1,5 @@
-from numpy import sqrt, zeros, sign, pi, arccos, ndarray
+
+from numpy import log, sqrt, zeros, sign, pi, arccos, ndarray
 from pandas import DataFrame, Series
 
 
@@ -24,14 +25,14 @@ def square_matrix_transform(matrix: DataFrame, vector: DataFrame) -> DataFrame:
     if not (sqrt(matrix.shape[1]) == vector.shape[1]):
         raise ValueError("Matrix must be square.")
 
-    vector_length = vector.shape[1]
-
     out = DataFrame(
         data=zeros(shape=vector.shape),
         index=vector.index,
         columns=vector.columns,
         dtype="float64",
     )
+
+    vector_length = vector.shape[1]
 
     for i in range(vector_length):
         for j in range(vector_length):
@@ -50,13 +51,13 @@ def dot_product(vector_1: DataFrame, vector_2: DataFrame) -> Series:
     if not (vector_1.shape[1] == vector_2.shape[1]):
         raise ValueError("Vector dimensions must match.")
 
-    vector_length = vector_1.shape[1]
-
     out = Series(
         data=zeros(len(vector_1)),
         index=vector_1.index,
         dtype="float64",
     )
+
+    vector_length = vector_1.shape[1]
 
     for dimension in range(vector_length):
         out += vector_1.iloc[:, dimension] * vector_2.iloc[:, dimension]
@@ -507,7 +508,8 @@ def calc_chi(
     """
     Find the decay angle chi in B -> K* l+ l-.
 
-    Chi is the angle between the K* K decay plane and the dilepton l+ decay plane. It ranges from 0 to 2*pi.
+    Chi is the angle between the K* K decay plane and the dilepton l+ decay plane. 
+    It ranges from 0 to 2*pi.
     """
 
     cos_chi = calc_cos_chi(
@@ -539,7 +541,8 @@ def calc_dif_inv_mass_k_pi_k_star(
     k_four_mom: DataFrame, pi_four_mom: DataFrame
 ) -> Series:
     """
-    Calcualate the difference between the invariant mass of the K pi system and the K*'s invariant mass (PDG value).
+    Calcualate the difference between the invariant mass of the K pi system 
+    and the K*'s invariant mass (PDG value).
     """
     inv_mass_k_star = 0.892
     inv_mass_k_pi = sqrt(
@@ -611,6 +614,10 @@ def calc_vars(input: DataFrame, lepton_flavor: str):
         pos_lepton_four_mom_mc,
         neg_lepton_four_mom_mc,
     )
+    
+    out["log_q_sq"] = log(out["q_sq"])
+    out["log_q_sq_mc"] = log(out["q_sq_mc"])
+
     out["cos_theta_lepton"] = calc_cos_theta_lepton(
         pos_lepton_four_mom=pos_lepton_four_mom,
         neg_lepton_four_mom=neg_lepton_four_mom,
@@ -621,6 +628,7 @@ def calc_vars(input: DataFrame, lepton_flavor: str):
         neg_lepton_four_mom=neg_lepton_four_mom_mc,
         b_meson_four_mom=b_meson_four_mom_mc,
     )
+
     out["cos_theta_k"] = calc_cos_theta_k(
         k_four_mom=k_four_mom,
         k_star_four_mom=k_star_four_mom,
@@ -631,6 +639,22 @@ def calc_vars(input: DataFrame, lepton_flavor: str):
         k_star_four_mom=k_star_four_mom_mc,
         b_meson_four_mom=b_meson_four_mom_mc,
     )
+
+    out["cos_chi"] = calc_cos_chi(
+        b_meson_four_mom=b_meson_four_mom,
+        k_four_mom=k_four_mom,
+        k_star_four_mom=k_star_four_mom,
+        pos_lepton_four_mom=pos_lepton_four_mom,
+        neg_lepton_four_mom=neg_lepton_four_mom,
+    )
+    out["cos_chi_mc"] = calc_cos_chi(
+        b_meson_four_mom=b_meson_four_mom_mc,
+        k_four_mom=k_four_mom_mc,
+        k_star_four_mom=k_star_four_mom_mc,
+        pos_lepton_four_mom=pos_lepton_four_mom_mc,
+        neg_lepton_four_mom=neg_lepton_four_mom_mc,
+    )
+
     out["chi"] = calc_chi(
         b_meson_four_mom=b_meson_four_mom,
         k_four_mom=k_four_mom,
@@ -645,6 +669,7 @@ def calc_vars(input: DataFrame, lepton_flavor: str):
         pos_lepton_four_mom=pos_lepton_four_mom_mc,
         neg_lepton_four_mom=neg_lepton_four_mom_mc,
     )
+
     out["dif_inv_mass_k_pi_k_star"] = calc_dif_inv_mass_k_pi_k_star(
         k_four_mom=k_four_mom,
         pi_four_mom=pi_four_mom,
@@ -653,4 +678,5 @@ def calc_vars(input: DataFrame, lepton_flavor: str):
         k_four_mom=k_four_mom_mc,
         pi_four_mom=pi_four_mom_mc,
     )
+
     return out

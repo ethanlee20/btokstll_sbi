@@ -68,7 +68,7 @@ def _val_batch(
 
 
 def _train_epoch(
-    data_loader: SetDataLoader,
+    dataloader: NreCDataLoader,
     model: Module,
     loss_fn,
     optimizer: Optimizer,
@@ -78,7 +78,7 @@ def _train_epoch(
 
     cum_loss = zeros(1)
     cum_loss = cum_loss.to(device)
-    for parameters, features, labels in data_loader:
+    for parameters, features, labels in dataloader:
         batch_loss = _train_batch(
             parameters,
             features,
@@ -89,14 +89,14 @@ def _train_epoch(
         )
         cum_loss += batch_loss
 
-    num_batches = len(data_loader)
+    num_batches = len(dataloader)
     avg_batch_loss = cum_loss / num_batches
 
     return avg_batch_loss
 
 
 def _val_epoch(
-    data_loader: SetDataLoader, 
+    dataloader: NreCDataLoader, 
     model: Module, 
     loss_fn,
 ) -> Tensor:
@@ -104,36 +104,36 @@ def _val_epoch(
     device = get_model_device(model)
 
     cum_loss = zeros(1).to(device)
-    for parameters, features, labels in data_loader:
+    for parameters, features, labels in dataloader:
         batch_loss = _val_batch(parameters, features, labels, model, loss_fn)
         cum_loss += batch_loss
 
-    num_batches = len(data_loader)
+    num_batches = len(dataloader)
     avg_batch_loss = cum_loss / num_batches
     return avg_batch_loss
 
 
 def _train_val_epoch(
-    train_data_loader: SetDataLoader,
+    train_dataloader: NreCDataLoader,
     model: Module,
     loss_fn,
     optimizer: Optimizer,
-    val_data_loader: SetDataLoader | None = None,
+    val_dataloader: SetDataLoader | None = None,
     lr_scheduler: None | LRScheduler = None,
 ) -> DataFrame | Series:
 
     train_loss = _train_epoch(
-        train_data_loader,
+        train_dataloader,
         model,
         loss_fn,
         optimizer,
     )
     train_loss_series = pandas_from_tensor(train_loss, names="train")
 
-    run_val = val_data_loader is not None
+    run_val = val_dataloader is not None
     if run_val:
         val_loss = _val_epoch(
-            val_data_loader,
+            val_dataloader,
             model,
             loss_fn,
         )
@@ -150,27 +150,27 @@ def _train_val_epoch(
 
 
 def train_val(
-    train_data_loader: SetDataLoader,
+    train_dataloader: NreCDataLoader,
     model: Module,
     loss_fn,
     optimizer: Optimizer,
     num_epochs: int,
-    val_data_loader: SetDataLoader | None = None,
+    val_dataloader: SetDataLoader | None = None,
     lr_scheduler: None | LRScheduler = None,
 ) -> DataFrame | Series:
 
     losses = []
     for ep in range(num_epochs):
         epoch_losses = _train_val_epoch(
-            train_data_loader=train_data_loader,
+            train_dataloader=train_dataloader,
             model=model,
             loss_fn=loss_fn,
             optimizer=optimizer,
-            val_data_loader=val_data_loader,
+            val_dataloader=val_dataloader,
             lr_scheduler=lr_scheduler,
         )
         losses.append(epoch_losses)
-        if val_data_loader is not None:
+        if val_dataloader is not None:
             print(
                 f"Epoch {ep}: Train: {epoch_losses['train'].item():.4g}," 
                 f" Val: {epoch_losses['val'].item():.4g}"
@@ -182,30 +182,41 @@ def train_val(
     return losses
 
 
-"""
-        labels = []
-        mles = []
-        confs = []
-        for trial_num in range(100):
-            df_val_set = df_val_sets.xs(trial_num, level="trial_num")
-            label = df_val_set["dC_9"].unique()
-            #if label <= 1 and label >= -2:
-            features = df_val_set[feature_cols]
-            mle, conf = get_mle_and_conf(model, features, -5, 2, 100)
-            labels.append(label)
-            mles.append(mle)
-            confs.append(conf)
-        labels = numpy.array(labels)
-        mles = numpy.array(mles)
-        confs = numpy.array(confs)
+def plot_loss(
+    ax: Axes,
+    train_losses: ArrayLike,
+    val_losses: ArrayLike | None = None,
+    yscale: str = "linear",
+    scatter_or_plot: str = "scatter",
+    compute_log: bool = False,
+    **kwargs,
+):
+    if scatter_or_plot not in ("scatter", "plot"):
+        raise ValueError(
+            "scatter_or_plot should be 'scatter' or 'plot'." f"\nGot: {scatter_or_plot}"
+        )
 
-        fig, ax = matplotlib.pyplot.subplots()
-        ax.plot([-5, 2], [-5, 2], color="#377eb8", label="Ideal", zorder=-100)
-        ax.scatter(labels, mles, color="#ff7f00")
-        ax.vlines(labels, confs[:,0], confs[:, 1], color='#4daf4a', linestyle="-", zorder=-101, label=r"Log Likelihood $1\sigma$")
-        ax.set_ylabel(r"Predicted $\delta C_9$", fontsize=16)
-        ax.set_xlabel(r"True $\delta C_9$", fontsize=16)
-        ax.legend()
-        fig.savefig("plots/lin.png", bbox_inches="tight")
-        matplotlib.pyplot.close()
-"""
+    if val_losses is not None:
+        if len(val_losses) != len(train_losses):
+            raise ValueError
+
+    plot_fn = ax.scatter if scatter_or_plot == "scatter" else ax.plot if scatter_or_plot == "plot" else None
+    if plot_fn is None:
+        raise ValueError
+
+    epochs = arange(len(train_losses))
+
+    if compute_log:
+        train_losses = log10(train_losses)
+    if compute_log and val_losses is not None:
+        val_losses = log10(val_losses)
+
+    plot_fn(epochs, train_losses, label="Train", **kwargs)
+
+    if val_losses is not None:
+        plot_fn(epochs, val_losses, label="Eval.", **kwargs)
+
+    ax.set_yscale(yscale)
+    ax.legend()
+    ax.set_ylabel("Log Loss" if compute_log else "Loss", fontsize=15)
+    ax.set_xlabel("Epoch", fontsize=15)

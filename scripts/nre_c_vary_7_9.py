@@ -125,7 +125,6 @@ def run_training():
     matplotlib.pyplot.close()
 
 
-
 def run_evaluation():
     
     model = MLP(
